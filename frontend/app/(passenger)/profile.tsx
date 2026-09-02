@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -5,11 +6,16 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
+import CitiesModeration from "@/src/components/CitiesModeration";
+import DriversAdmin from "@/src/components/admin/DriversAdmin";
+import CompanyJoinCard from "@/src/components/CompanyJoinCard";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [showCities, setShowCities] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const doLogout = async () => {
     await logout();
@@ -54,7 +60,26 @@ export default function Profile() {
         <MenuItem icon="help-circle-outline" label="Aide" />
       </View>
 
-      <Pressable testID="logout-button" style={styles.logout} onPress={doLogout}>
+            <CompanyJoinCard />
+
+      {user.is_moderator && (
+        <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Administration chauffeurs & documents</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <DriversAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} />
+      {user.is_moderator && (
+        <Pressable testID="open-cities-moderation" onPress={() => setShowCities(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="city-variant-outline" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Modération des centres-villes</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <CitiesModeration visible={showCities} onClose={() => setShowCities(false)} />
+
+<Pressable testID="logout-button" style={styles.logout} onPress={doLogout}>
         <Icon name="logout" size={20} color={theme.color.error} />
         <Text style={styles.logoutText}>Se déconnecter</Text>
       </Pressable>

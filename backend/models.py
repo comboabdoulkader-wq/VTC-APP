@@ -4,7 +4,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-Role = Literal["passenger", "driver"]
+Role = Literal["passenger", "driver", "company"]
+BudgetPeriod = Literal["day", "week", "month"]
 RideStatus = Literal["requested", "accepted", "in_progress", "completed", "cancelled"]
 VehicleType = Literal["standard", "premium", "van"]
 PaymentMethod = Literal["cash", "card"]
@@ -20,6 +21,7 @@ class RegisterIn(BaseModel):
     phone: Optional[str] = None
     vehicle_model: Optional[str] = None
     license_plate: Optional[str] = None
+    company_name: Optional[str] = None
 
 
 class LoginIn(BaseModel):
@@ -41,6 +43,15 @@ class UserOut(BaseModel):
     manager_name: Optional[str] = None
     is_active: bool = True
     is_online: bool = False
+    is_moderator: bool = False
+    docs_blocked: bool = False
+    selfie_requested: bool = False
+    company_name: Optional[str] = None
+    invite_code: Optional[str] = None
+    company_id: Optional[str] = None
+    budget_amount: Optional[float] = None
+    budget_period: Optional[BudgetPeriod] = None
+    company_active: Optional[bool] = None
 
 
 class TokenOut(BaseModel):
@@ -74,6 +85,7 @@ class SurchargeOut(BaseModel):
     per_km: float
     amount: float
     center_name: str
+    city_id: Optional[str] = None
 
 
 class EstimateOut(BaseModel):
@@ -90,6 +102,7 @@ class RideCreateIn(BaseModel):
     passenger_label: Optional[str] = Field(default=None, max_length=80)
     notes: Optional[str] = Field(default=None, max_length=300)
     payment_method: PaymentMethod = "cash"
+    business: bool = False
 
 
 class RideBatchIn(BaseModel):
@@ -134,6 +147,7 @@ class RideOut(BaseModel):
     payment_status: PaymentStatus = "unpaid"
     commission_rate: float = 0
     commission_amount: float = 0
+    business: bool = False
     assigned_by_name: Optional[str] = None
     created_at: datetime
     accepted_at: Optional[datetime] = None
@@ -223,3 +237,44 @@ class NotificationOut(BaseModel):
     ride_id: Optional[str] = None
     read: bool
     created_at: datetime
+
+
+# ---- Company / business accounts ----
+class JoinCompanyIn(BaseModel):
+    code: str = Field(min_length=4, max_length=12)
+
+
+class EmployeeUpdateIn(BaseModel):
+    budget_amount: Optional[float] = Field(default=None, ge=0)
+    budget_period: Optional[BudgetPeriod] = None
+    company_active: Optional[bool] = None
+
+
+class EmployeeOut(UserOut):
+    spent: float = 0
+    remaining: Optional[float] = None
+    rides_count: int = 0
+
+
+# ---- Cities (moderation) ----
+class CityIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    country: Optional[str] = None
+    lat: float
+    lng: float
+
+
+class CityUpdateIn(BaseModel):
+    name: Optional[str] = None
+    country: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class CityOut(BaseModel):
+    id: str
+    name: str
+    country: Optional[str] = None
+    lat: float
+    lng: float
+    source: str = "default"

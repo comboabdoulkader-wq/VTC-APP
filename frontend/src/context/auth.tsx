@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 const API = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TOKEN_KEY = "vtc_token";
 
-export type Role = "passenger" | "driver";
+export type Role = "passenger" | "driver" | "company";
 
 export type User = {
   id: string;
@@ -20,7 +20,18 @@ export type User = {
   manager_id?: string | null;
   manager_name?: string | null;
   is_active?: boolean;
+  is_moderator?: boolean;
+  docs_blocked?: boolean;
+  selfie_requested?: boolean;
+  company_name?: string | null;
+  invite_code?: string | null;
+  company_id?: string | null;
+  budget_amount?: number | null;
+  budget_period?: "day" | "week" | "month" | null;
+  company_active?: boolean | null;
 };
+
+export const homeFor = (role: Role) => (role === "passenger" ? "/(passenger)" : role === "company" ? "/(company)" : "/(driver)");
 
 type AuthCtx = {
   user: User | null;
@@ -40,6 +51,7 @@ type RegisterPayload = {
   phone?: string;
   vehicle_model?: string;
   license_plate?: string;
+  company_name?: string;
 };
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);

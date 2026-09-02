@@ -8,6 +8,7 @@ import { theme } from "@/src/theme";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import AddMemberForm from "@/src/components/driver/AddMemberForm";
 import MemberDetail, { Member } from "@/src/components/driver/MemberDetail";
+import AccountingExport from "@/src/components/AccountingExport";
 import { money } from "@/src/utils/format";
 
 type Overview = { members_count: number; online_count: number; active_count: number; gross: number; commission: number; net: number; completed_rides: number };
@@ -97,6 +98,8 @@ export default function Team() {
             <Icon name="chevron-right" size={22} color={theme.color.onSurfaceTertiary} />
           </Pressable>
         ))}
+
+        <AccountingExport basePath="/team" groupLabel="chauffeur" />
       </ScrollView>
 
       <AddMemberForm visible={showAdd} onClose={() => setShowAdd(false)} onCreated={(m) => { setMembers((l) => [...l, m]); load(); }} />

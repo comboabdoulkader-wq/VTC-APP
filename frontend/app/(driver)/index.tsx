@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, RefreshControl } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, RefreshControl, Alert } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
-import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
+import MapCanvas, { MapMarker, LatLng } from "@/src/components/MapCanvas";
+import { getNavApp, setNavApp, openNavigation, NavApp } from "@/src/utils/files";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { DEFAULT_PICKUP } from "@/src/data/places";
 import { useDriverLocation } from "@/src/hooks/useDriverLocation";
@@ -27,8 +28,13 @@ function RideTags({ r }: { r: Ride }) {
 
 export default function DriverHome() {
   const insets = useSafeAreaInsets();
-  const { token, user } = useAuth();
+  const { token, user, refresh } = useAuth();
+  const router = useRouter();
   const [online, setOnline] = useState(false);
+  const [route, setRoute] = useState<LatLng[] | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ distance_km: number | null; duration_min: number | null } | null>(null);
+  const [compliance, setCompliance] = useState<{ blocked: boolean; blocking: string[] } | null>(null);
+  const blocked = compliance ? compliance.blocked : !!user?.docs_blocked;
   const [rides, setRides] = useState<Ride[]>([]);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,7 +55,10 @@ export default function DriverHome() {
     try { setRides(await apiFetch<Ride[]>("/rides/available", {}, token)); } catch {} finally { setLoading(false); setRefreshing(false); }
   }, [online, token]);
 
-  useFocusEffect(useCallback(() => { loadActive(); loadAvailable(); }, [loadActive, loadAvailable]));
+  useFocusEffect(useCallback(() => {
+    loadActive(); loadAvailable();
+    apiFetch<any>("/documents/mine", {}, token).then((c) => setCompliance({ blocked: c.blocked, blocking: c.blocking })).catch(() => {});
+  }, [loadActive, loadAvailable, token]));
 
   useEffect(() => {
     const t = setInterval(() => { loadActive(); if (online && !activeRide) loadAvailable(); }, 5000);
@@ -58,7 +67,30 @@ export default function DriverHome() {
 
   useEffect(() => { loadAvailable(); }, [online, loadAvailable]);
 
+  // In-app travel plan: real driving route (OSRM) from driver position (or pickup) to the current target
+  useEffect(() => {
+    if (!activeRide) { setRoute(null); setRouteInfo(null); return; }
+    const target = activeRide.status === "accepted" ? activeRide.pickup : activeRide.dropoff;
+    const from = loc.coords || (activeRide.status === "accepted" ? null : activeRide.pickup);
+    if (!from) { setRoute(null); return; }
+    apiFetch<any>(`/geo/route?from_lat=${from.lat}&from_lng=${from.lng}&to_lat=${target.lat}&to_lng=${target.lng}`)
+      .then((r) => { setRoute(r.coords); setRouteInfo({ distance_km: r.distance_km, duration_min: r.duration_min }); }).catch(() => setRoute(null));
+  }, [activeRide?.id, activeRide?.status, loc.coords?.lat, loc.coords?.lng]);
+
+  const navigateTo = async (target: { lat: number; lng: number; address: string }) => {
+    let app = await getNavApp();
+    if (!app) {
+      Alert.alert("Application de navigation", "Choisissez votre GPS par défaut (modifiable dans Profil → Navigation)", [
+        { text: "Waze", onPress: async () => { await setNavApp("waze"); openNavigation("waze", target.lat, target.lng, target.address); } },
+        { text: "Google Maps", onPress: async () => { await setNavApp("gmaps"); openNavigation("gmaps", target.lat, target.lng, target.address); } },
+      ]);
+      return;
+    }
+    openNavigation(app as NavApp, target.lat, target.lng, target.address);
+  };
+
   const toggleOnline = async () => {
+    if (blocked) { refresh(); router.push("/(driver)/documents"); return; }
     const next = !online;
     if (next && loc.permission !== "granted" && !loc.isWeb) setShowPermCard(true);
     setOnline(next);
@@ -92,7 +124,7 @@ export default function DriverHome() {
 
   return (
     <View style={styles.root} testID="driver-home">
-      <MapCanvas region={{ ...center, latitudeDelta: 0.08, longitudeDelta: 0.08 }} markers={markers} />
+      <MapCanvas region={{ ...center, latitudeDelta: 0.08, longitudeDelta: 0.08 }} markers={markers} polyline={route || undefined} />
 
       <View style={[styles.topBar, { top: insets.top + theme.spacing.md }]}>
         <Pressable testID="online-toggle" onPress={toggleOnline} style={[styles.goBtn, online && styles.goBtnOnline]}>
@@ -109,6 +141,18 @@ export default function DriverHome() {
 
       <View style={[styles.sheet, { paddingBottom: insets.bottom + theme.spacing.lg }]}>
         <View style={styles.handle} />
+
+        {blocked && (
+          <Pressable testID="docs-blocked-banner" onPress={() => router.push("/(driver)/documents")} style={styles.blockedCard}>
+            <Icon name="lock-alert" size={26} color={theme.color.error} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.blockedTitle}>Compte temporairement bloqué</Text>
+              <Text style={styles.blockedText}>Votre compte est temporairement bloqué car un ou plusieurs documents obligatoires ont expiré ou manquent. Merci de les mettre à jour pour réactiver votre compte.</Text>
+              {compliance?.blocking?.length ? <Text style={styles.blockedText}>À fournir : {compliance.blocking.join(", ")}</Text> : null}
+              <Text style={[styles.blockedText, { fontWeight: "800", marginTop: 4 }]}>Ouvrir mes documents →</Text>
+            </View>
+          </Pressable>
+        )}
 
         {showPermCard && loc.permission !== "granted" && (
           <View style={styles.permCard} testID="location-permission-card">
@@ -155,13 +199,20 @@ export default function DriverHome() {
               {activeRide.notes ? <Text style={styles.notes}>📝 {activeRide.notes}</Text> : null}
             </View>
 
+            {routeInfo?.distance_km != null && (
+              <Text style={styles.routeInfo}>🛣️ Itinéraire : {routeInfo.distance_km} km · ≈ {routeInfo.duration_min} min</Text>
+            )}
+            <Pressable testID="navigate-button" onPress={() => navigateTo(activeRide.status === "accepted" ? activeRide.pickup : activeRide.dropoff)} style={styles.navBtn}>
+              <Icon name="navigation-variant" size={20} color="#fff" />
+              <Text style={styles.navText}>{activeRide.status === "accepted" ? "Aller au client" : "Aller à destination"} · Waze / Google Maps</Text>
+            </Pressable>
             {activeRide.status === "accepted" && (
               <>
                 <Pressable testID="im-here" onPress={imHere} style={styles.secondary}>
                   <Icon name="bell-ring-outline" size={18} color={theme.color.onSurface} />
                   <Text style={styles.secondaryText}>Je suis sur place – prévenir le passager</Text>
                 </Pressable>
-                <Pressable testID="start-ride" onPress={startRide} style={styles.primary}><Text style={styles.primaryText}>Démarrer la course</Text></Pressable>
+                <Pressable testID="start-ride" onPress={startRide} style={styles.primary}><Text style={styles.primaryText}>Client à bord – démarrer</Text></Pressable>
               </>
             )}
             {activeRide.status === "in_progress" && (
@@ -222,6 +273,12 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 20, fontWeight: "800", color: theme.color.onSurface, marginBottom: theme.spacing.lg, flex: 1 },
   etaPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: theme.color.brand, paddingHorizontal: theme.spacing.md, height: 30, borderRadius: theme.radius.pill, marginBottom: theme.spacing.lg },
   etaText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  blockedCard: { flexDirection: "row", gap: theme.spacing.md, backgroundColor: "#FDECEC", borderRadius: theme.radius.md, padding: theme.spacing.md, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: "#F5B5B5" },
+  blockedTitle: { fontSize: 15, fontWeight: "800", color: theme.color.error },
+  blockedText: { fontSize: 13, color: theme.color.onSurfaceSecondary, marginTop: 2, lineHeight: 18 },
+  routeInfo: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600", marginBottom: theme.spacing.sm },
+  navBtn: { flexDirection: "row", gap: theme.spacing.sm, alignItems: "center", justifyContent: "center", backgroundColor: "#1A73E8", height: 50, borderRadius: theme.radius.pill, marginBottom: theme.spacing.sm },
+  navText: { color: "#fff", fontWeight: "800", fontSize: 14 },
   permCard: { flexDirection: "row", gap: theme.spacing.md, backgroundColor: "#FFF7ED", borderRadius: theme.radius.md, padding: theme.spacing.md, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: "#FED7AA" },
   permTitle: { fontSize: 15, fontWeight: "800", color: theme.color.onSurface },
   permText: { fontSize: 13, color: theme.color.onSurfaceSecondary, marginTop: 2, lineHeight: 18 },

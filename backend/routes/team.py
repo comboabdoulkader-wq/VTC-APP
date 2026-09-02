@@ -52,7 +52,7 @@ async def add_member(data: TeamMemberIn, user=Depends(driver_only)):
         "id": new_id(), "email": email, "password_hash": hash_password(data.password),
         "full_name": data.full_name, "role": "driver", "phone": data.phone,
         "vehicle_model": data.vehicle_model, "license_plate": data.license_plate,
-        "rating": 5.0, "total_rides": 0, "is_online": False, "is_active": True,
+        "rating": 5.0, "total_rides": 0, "is_online": False, "is_active": True, "docs_blocked": True,
         "manager_id": user["id"], "manager_name": user["full_name"], "created_at": now_utc(),
     }
     await db.users.insert_one(member.copy())
@@ -133,3 +133,40 @@ async def overview(user=Depends(driver_only)):
         "net": round(sum(m.net for m in members), 2),
         "completed_rides": sum(m.completed_rides for m in members),
     }
+
+
+# ---------- Accounting exports ----------
+from fastapi import Query  # noqa: E402
+from fastapi.responses import Response  # noqa: E402
+from reports import build_csv, build_pdf, group_rides, month_label, rides_for  # noqa: E402
+
+
+async def team_query(user: dict) -> dict:
+    ids = [user["id"]] + [m["id"] async for m in db.users.find({"manager_id": user["id"]}, {"_id": 0, "id": 1})]
+    return {"driver_id": {"$in": ids}}
+
+
+@router.get("/invoices")
+async def invoices(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(driver_only)):
+    rides = await rides_for(await team_query(user), month)
+    groups = group_rides(rides, "driver_id", "driver_name")
+    return {
+        "month": month, "label": month_label(month), "count": len(rides),
+        "gross": round(sum(g["gross"] for g in groups), 2), "commission": round(sum(g["commission"] for g in groups), 2),
+        "net": round(sum(g["net"] for g in groups), 2),
+        "groups": [{k: v for k, v in g.items() if k != "rides"} for g in groups],
+    }
+
+
+@router.get("/export.csv")
+async def export_csv(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(driver_only)):
+    rides = await rides_for(await team_query(user), month)
+    return Response(build_csv(rides), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="courses-{month}.csv"'})
+
+
+@router.get("/export.pdf")
+async def export_pdf(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(driver_only)):
+    rides = await rides_for(await team_query(user), month)
+    pdf = build_pdf(f"Relevé mensuel — {user['full_name']}", f"Période : {month_label(month)} · {len(rides)} course(s) · commissions 15 % sur courses privées",
+                    group_rides(rides, "driver_id", "driver_name"), "chauffeur")
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="releve-{month}.pdf"'})

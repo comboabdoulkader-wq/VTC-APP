@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core import (
     ARRIVAL_ALERT_MIN, CITY_CENTER, PRIVATE_COMMISSION_RATE, db, eta_minutes, new_id,
-    notify, now_utc, require_role,
+    notify, now_utc, require_role, working_driver,
 )
 from models import DriverStatusIn, LocationUpdateIn, PrivateRideIn, PrivateRideUpdateIn, RideOut
 from serializers import ride_to_out
@@ -15,6 +15,9 @@ driver_only = require_role("driver")
 
 @router.post("/status")
 async def driver_status(data: DriverStatusIn, user=Depends(driver_only)):
+    if data.is_online and user.get("docs_blocked"):
+        from core import BLOCKED_DRIVER_MESSAGE
+        raise HTTPException(423, BLOCKED_DRIVER_MESSAGE)
     update = {"is_online": data.is_online}
     if data.lat is not None and data.lng is not None:
         update["last_location"] = {"lat": data.lat, "lng": data.lng, "updated_at": now_utc()}

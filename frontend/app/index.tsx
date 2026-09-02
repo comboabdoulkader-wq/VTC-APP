@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 
-import { useAuth } from "@/src/context/auth";
+import { useAuth, homeFor } from "@/src/context/auth";
 import { theme } from "@/src/theme";
 
 export default function Index() {
@@ -12,8 +12,7 @@ export default function Index() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/(auth)/welcome");
-    else if (user.role === "passenger") router.replace("/(passenger)");
-    else router.replace("/(driver)");
+    else router.replace(homeFor(user.role) as any);
   }, [user, loading, router]);
 
   return (

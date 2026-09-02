@@ -27,8 +27,24 @@ Full-stack VTC (ride-hailing) mobile app: Expo + FastAPI + MongoDB. Two roles: P
 - Team tab (manager): add driver accounts, KPIs (gross/commission/net), activate/deactivate, assign open ride to a member, recent activity, remove; members see "team of X"
 - Earnings: net hero, platform vs private split, commission per ride
 
+## Iteration 3 additions
+- Passenger GPS pickup (expo-location, permission contract) + reverse geocoding; worldwide address autocomplete via Photon/OSM proxied by backend (`/geo/search`, `/geo/reverse`)
+- Worldwide city centers: `cities` collection seeded with 30 cities; nearest city (<=60 km) used for the surcharge; unknown areas auto-discovered via reverse geocoding; moderators (MODERATOR_EMAILS env, default test accounts) edit/add via `/admin/cities` + UI in Profil → "Modération des centres-villes"
+- Scheduled ride reminder: backend loop every 60 s notifies passenger + driver 45 min before `scheduled_at` (REMINDER_MIN)
+- Accounting exports: `/team/invoices|export.csv|export.pdf?month=YYYY-MM` (per driver) and `/company/report|export.csv|export.pdf` (per employee); reportlab PDF; auth via `?token=` query supported for downloads; UI component AccountingExport
+- Business accounts (role `company`): register with company_name → invite_code; passenger joins via Profil → Compte professionnel; company sets budget (day/week/month) + blocks access; passenger toggles "Déplacement professionnel" at booking (server enforces budget → 402); company dashboard `(company)` group: live rides, history, overview, employees, exports
+
+## Iteration 5 additions – Documents, blocking, selfie, navigation
+- Driver documents (8 types: id_card, driving_license, vtc_card*, rc_pro (independent drivers only), registration (no expiry), vehicle_insurance, rc_circulation, technical_inspection*) — * "si applicable" can be marked "Non concerné"
+- Upload (JPG/PNG/WEBP/PDF ≤10 Mo) to Emergent Object Storage (`storage.py`, EMERGENT_LLM_KEY), viewed via `/api/files/{path}?token=`
+- Validity dates (valid_from optional, valid_until required when expires); auto-valid on upload; admins (moderators) can validate/reject (`PATCH /admin/documents/{id}`)
+- Hourly compliance sweep: J-30 alert to driver + admins (once), expiry → status expired + alert; any required doc missing/expired/rejected → `docs_blocked` → cannot go online / see / accept rides (HTTP 423 with the official message); auto-unblock after re-upload
+- On-demand selfie: admin `POST /admin/drivers/{id}/request-selfie` → driver banner → camera upload (type selfie, pending) → admin validates/rejects (reject re-requests)
+- Admin console UI: Profil → "Administration chauffeurs & documents" (moderators, any role)
+- Navigation: driver "Aller au client" / "Aller à destination" opens Waze or Google Maps (deep links, fallbacks), preference stored (AsyncStorage) + Profil → Navigation; in-app travel plan = real driving route via OSRM (`GET /geo/route`) drawn on the map with distance/duration
+
 ## Backend structure
-- `core.py` (config, DB, auth helpers, pricing, notify/SMS), `models.py`, `serializers.py`, `routes/{auth,rides,driver,team,payments,notifications}.py`, `server.py`
+- `core.py` (config, DB, auth helpers, pricing, notify/SMS), `models.py`, `serializers.py`, `routes/{auth,rides,driver,team,payments,notifications,company,geo_routes,documents}.py`, `storage.py` (object storage), `geo.py` (Photon), `reports.py` (CSV/PDF), `server.py`
 
 ## Endpoints (/api)
 - Auth: POST /auth/register, /auth/login, GET /auth/me

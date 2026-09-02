@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
-import { useAuth, Role } from "@/src/context/auth";
+import { useAuth, Role, homeFor } from "@/src/context/auth";
 
 export default function Register() {
   const router = useRouter();
@@ -21,6 +21,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,6 +34,7 @@ export default function Register() {
     if (role === "driver" && (!vehicleModel.trim() || !licensePlate.trim())) {
       setError("Renseignez le modèle et la plaque du véhicule"); return;
     }
+    if (role === "company" && !companyName.trim()) { setError("Renseignez le nom de l'entreprise"); return; }
     setLoading(true);
     try {
       const u = await register({
@@ -43,8 +45,9 @@ export default function Register() {
         phone: phone.trim() || undefined,
         vehicle_model: role === "driver" ? vehicleModel.trim() : undefined,
         license_plate: role === "driver" ? licensePlate.trim() : undefined,
+        company_name: role === "company" ? companyName.trim() : undefined,
       });
-      router.replace(u.role === "passenger" ? "/(passenger)" : "/(driver)");
+      router.replace(homeFor(u.role) as any);
     } catch (e: any) {
       setError(e.message || "Erreur d'inscription");
     } finally { setLoading(false); }
@@ -80,10 +83,25 @@ export default function Register() {
             <Icon name="steering" size={22} color={role === "driver" ? theme.color.onBrand : theme.color.onSurface} />
             <Text style={[styles.roleText, role === "driver" && styles.roleTextActive]}>Chauffeur</Text>
           </Pressable>
+          <Pressable
+            testID="role-company"
+            onPress={() => setRole("company")}
+            style={[styles.roleBtn, role === "company" && styles.roleBtnActive]}
+          >
+            <Icon name="office-building" size={22} color={role === "company" ? theme.color.onBrand : theme.color.onSurface} />
+            <Text style={[styles.roleText, role === "company" && styles.roleTextActive]}>Entreprise</Text>
+          </Pressable>
         </View>
 
+        {role === "company" && (
+          <View style={styles.field}>
+            <Text style={styles.label}>Nom de l'entreprise</Text>
+            <TextInput testID="company-name-input" value={companyName} onChangeText={setCompanyName} placeholder="Acme Conseil" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
+          </View>
+        )}
+
         <View style={styles.field}>
-          <Text style={styles.label}>Nom complet</Text>
+          <Text style={styles.label}>{role === "company" ? "Nom du responsable" : "Nom complet"}</Text>
           <TextInput testID="fullname-input" value={fullName} onChangeText={setFullName} placeholder="Jean Dupont" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
         </View>
 
@@ -140,9 +158,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "800", color: theme.color.onSurface, letterSpacing: -1 },
   subtitle: { fontSize: 16, color: theme.color.onSurfaceSecondary, marginTop: theme.spacing.sm, marginBottom: theme.spacing.xl },
   roleRow: { flexDirection: "row", gap: theme.spacing.md, marginBottom: theme.spacing.xl },
-  roleBtn: { flex: 1, height: 56, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: theme.spacing.sm, borderWidth: 1, borderColor: "transparent" },
+  roleBtn: { flex: 1, height: 56, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, borderWidth: 1, borderColor: "transparent", paddingHorizontal: 4 },
   roleBtnActive: { backgroundColor: theme.color.brand },
-  roleText: { fontSize: 15, fontWeight: "700", color: theme.color.onSurface },
+  roleText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   roleTextActive: { color: theme.color.onBrand },
   field: { marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.onSurfaceSecondary, marginBottom: theme.spacing.sm },

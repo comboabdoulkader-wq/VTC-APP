@@ -141,3 +141,14 @@ frontend:
 agent_communication:
   - agent: "main"
     message: "Backend restructured into routes/*. Smoke script /app/backend/tests/smoke_new_features.py passes end-to-end (estimate→batch→checkout→accept→location→alert→complete, private ride + commission, team add/assign/deactivate). Stripe checkout URL generation verified with the user's rk_test key."
+
+## Iteration 4 – GPS, autocomplete, reminders, exports, business accounts, cities (main agent)
+backend: routes/company.py, routes/geo_routes.py, geo.py, reports.py, team exports, reminder loop in server.py, city-aware surcharge in core.py — smoke script tests/smoke_business.py passes.
+frontend: passenger GPS pickup + Photon autocomplete + business toggle; profile company join + cities moderation; (company) group (dashboard, employees, profile); AccountingExport in team tab and company dashboard; register has Entreprise role.
+agent_communication:
+  - agent: "main"
+    message: "All new endpoints smoke-tested. Please run pytest for new endpoints and UI flows listed in the task."
+
+## Iteration 6 – Driver documents / blocking / selfie / navigation (main agent)
+backend: routes/documents.py (+storage.py), working_driver dependency (423 when docs_blocked) on /rides/available, /rides/accept, /driver/status online; hourly compliance_loop; /geo/route (OSRM). Smoke-tested manually: upload, N/A, block/unblock, selfie request+review, file download, reject→block.
+frontend: (driver)/documents.tsx tab, admin console src/components/admin/DriversAdmin.tsx (profiles), driver home blocked banner + navigate-button + route polyline, driver profile nav-preference.

@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
-import { useAuth } from "@/src/context/auth";
+import { useAuth, homeFor } from "@/src/context/auth";
 
 export default function Login() {
   const router = useRouter();
@@ -24,7 +24,7 @@ export default function Login() {
     setLoading(true);
     try {
       const u = await login(email.trim(), password);
-      router.replace(u.role === "passenger" ? "/(passenger)" : "/(driver)");
+      router.replace(homeFor(u.role) as any);
     } catch (e: any) {
       setError(e.message || "Erreur de connexion");
     } finally {

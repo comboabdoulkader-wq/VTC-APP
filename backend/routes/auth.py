@@ -1,6 +1,8 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, hash_password, make_token, verify_password, current_user, now_utc, new_id
+from core import MODERATOR_EMAILS, db, hash_password, make_token, verify_password, current_user, now_utc, new_id
 from models import LoginIn, RegisterIn, TokenOut, UserOut
 from serializers import user_to_out
 
@@ -28,7 +30,15 @@ async def register(data: RegisterIn):
         "manager_id": None,
         "created_at": now_utc(),
     }
+    if data.role == "driver":
+        user["docs_blocked"] = True  # no documents yet → cannot work until mandatory documents are uploaded
+    if data.role == "company":
+        if not data.company_name:
+            raise HTTPException(422, "Nom de l'entreprise requis")
+        user["company_name"] = data.company_name
+        user["invite_code"] = secrets.token_hex(3).upper()
     await db.users.insert_one(user.copy())
+    user["is_moderator"] = email in MODERATOR_EMAILS
     return TokenOut(access_token=make_token(user), user=user_to_out(user))
 
 
@@ -39,6 +49,7 @@ async def login(data: LoginIn):
         raise HTTPException(401, "Email ou mot de passe incorrect")
     if user.get("is_active") is False:
         raise HTTPException(403, "Compte désactivé par votre gestionnaire")
+    user["is_moderator"] = user["email"] in MODERATOR_EMAILS
     return TokenOut(access_token=make_token(user), user=user_to_out(user))
 
 

@@ -17,6 +17,15 @@ def user_to_out(u: dict, **extra) -> UserOut:
         manager_name=u.get("manager_name"),
         is_active=u.get("is_active", True),
         is_online=u.get("is_online", False),
+        is_moderator=u.get("is_moderator", False),
+        docs_blocked=u.get("docs_blocked", False),
+        selfie_requested=u.get("selfie_requested", False),
+        company_name=u.get("company_name"),
+        invite_code=u.get("invite_code"),
+        company_id=u.get("company_id"),
+        budget_amount=u.get("budget_amount"),
+        budget_period=u.get("budget_period"),
+        company_active=u.get("company_active"),
         **extra,
     )
 
@@ -55,6 +64,7 @@ def ride_to_out(r: dict) -> RideOut:
         payment_status=r.get("payment_status", "unpaid"),
         commission_rate=r.get("commission_rate", 0),
         commission_amount=r.get("commission_amount", 0),
+        business=r.get("business", False),
         assigned_by_name=r.get("assigned_by_name"),
         created_at=r["created_at"],
         accepted_at=r.get("accepted_at"),

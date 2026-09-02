@@ -10,6 +10,9 @@ import { money } from "@/src/utils/format";
 // BottomSheetTextInput relies on native TextInput.State APIs that don't exist on web.
 const SheetInput: any = Platform.OS === "web" ? TextInput : BottomSheetTextInput;
 
+export type Budget = { company: string; active: boolean; budget_amount: number | null; budget_period: "day" | "week" | "month"; spent: number; remaining: number | null };
+const PERIOD_FR = { day: "jour", week: "semaine", month: "mois" };
+
 export type Surcharge = { distance_to_center_km: number; per_km: number; amount: number; center_name: string };
 
 export type RideOptionsValue = {
@@ -19,10 +22,11 @@ export type RideOptionsValue = {
   passengerLabel: string;
   notes: string;
   paymentMethod: "cash" | "card";
+  business: boolean;
 };
 
 export const DEFAULT_OPTIONS: RideOptionsValue = {
-  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash",
+  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash", business: false,
 };
 
 type Props = {
@@ -31,9 +35,10 @@ type Props = {
   surcharge: Surcharge | null;
   basePrice: number;
   cardEnabled: boolean;
+  budget?: Budget | null;
 };
 
-export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled }: Props) {
+export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled, budget }: Props) {
   const set = (patch: Partial<RideOptionsValue>) => onChange({ ...value, ...patch });
   const total = basePrice + (value.surchargeEnabled && surcharge ? surcharge.amount : 0);
 
@@ -98,6 +103,29 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
         />
       )}
 
+      {/* Course professionnelle */}
+      {budget && budget.active && (
+        <>
+          <Text style={styles.label}><Icon name="briefcase-outline" size={14} /> Déplacement professionnel</Text>
+          <Pressable testID="business-toggle" onPress={() => set({ business: !value.business, paymentMethod: !value.business ? "cash" : value.paymentMethod })}
+            style={[styles.card, { marginTop: 0 }, value.business && styles.cardActive]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: theme.spacing.md }}>
+              <View style={styles.cardIcon}><Icon name="office-building" size={22} color={theme.color.onSurface} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Facturer à {budget.company}</Text>
+                <Text style={styles.cardMeta}>
+                  {budget.remaining == null ? "Budget illimité" : `${money(budget.remaining)} restants ce ${PERIOD_FR[budget.budget_period]}`}
+                </Text>
+              </View>
+              <Switch testID="business-switch" value={value.business} onValueChange={(v) => set({ business: v })} trackColor={{ true: theme.color.success, false: theme.color.borderStrong }} thumbColor="#fff" />
+            </View>
+            {value.business && budget.remaining != null && total > budget.remaining && (
+              <Text style={[styles.cardHint, { color: theme.color.error, fontWeight: "700" }]}>Budget insuffisant pour cette course ({money(total)}).</Text>
+            )}
+          </Pressable>
+        </>
+      )}
+
       {/* Paiement */}
       <Text style={styles.label}><Icon name="wallet-outline" size={14} /> Paiement</Text>
       <View style={styles.chips}>
@@ -134,7 +162,7 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
           <View style={styles.totalRow}><Text style={styles.totalLabel}>Rallonge ({surcharge.distance_to_center_km.toFixed(1)} km)</Text><Text style={styles.totalVal}>+{money(surcharge.amount)}</Text></View>
         )}
         <View style={[styles.totalRow, styles.totalFinal]}>
-          <Text style={styles.totalFinalLabel}>Total {value.scheduledAt ? "· programmée" : ""}</Text>
+          <Text style={styles.totalFinalLabel}>Total {value.scheduledAt ? "· programmée" : ""}{value.business ? " · pro" : ""}</Text>
           <Text style={styles.totalFinalVal}>{money(total)}</Text>
         </View>
       </View>

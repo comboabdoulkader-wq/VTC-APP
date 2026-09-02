@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.vtcplatform.q33vdy",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Partager votre position pour le suivi de course en direct"
+        "NSLocationWhenInUseUsageDescription": "Partager votre position pour le suivi de course en direct",
+        "NSCameraUsageDescription": "Photographier vos documents et selfie de vérification",
+        "NSPhotoLibraryUsageDescription": "Importer vos documents depuis vos photos"
       }
     },
     "android": {
@@ -22,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.vtcplatform.q33vdy",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "VIBRATE"]
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "VIBRATE", "CAMERA", "READ_MEDIA_IMAGES"]
     },
     "web": {
       "bundler": "metro",
@@ -42,6 +44,13 @@
       ],
       "@react-native-vector-icons/material-design-icons",
       "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Photographier vos documents et selfie de vérification",
+          "photosPermission": "Importer vos documents depuis vos photos"
+        }
+      ],
       [
         "expo-location",
         {

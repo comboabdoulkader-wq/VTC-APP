@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core import (
     VEHICLE_PRICING, base_fare, current_user, db, new_id, notify, now_utc,
-    require_role, surcharge_for, trip_metrics,
+    require_role, surcharge_for, trip_metrics, working_driver,
 )
 from models import EstimateIn, EstimateOut, RateIn, RideBatchIn, RideCreateIn, RideOut, VehicleEstimate
 from serializers import ride_to_out
@@ -25,14 +25,14 @@ async def estimate(data: EstimateIn):
         )
         for vt, cfg in VEHICLE_PRICING.items()
     ]
-    return EstimateOut(options=options, surcharge=surcharge_for(pickup))
+    return EstimateOut(options=options, surcharge=await surcharge_for(pickup))
 
 
-def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = None) -> dict:
+async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = None) -> dict:
     pickup, dropoff = data.pickup.model_dump(), data.dropoff.model_dump()
     dist, duration = trip_metrics(pickup, dropoff)
     base = base_fare(data.vehicle_type, dist, duration)
-    sur = surcharge_for(pickup) if data.surcharge_enabled else None
+    sur = await surcharge_for(pickup) if data.surcharge_enabled else None
     sur_amount = sur["amount"] if sur else 0.0
     return {
         "id": new_id(),
@@ -58,14 +58,31 @@ def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = None) -
         "scheduled_at": data.scheduled_at,
         "payment_method": data.payment_method,
         "payment_status": "unpaid",
+        "business": bool(data.business),
+        "company_id": user.get("company_id") if data.business else None,
         "arrival_notified": False,
+        "reminder_sent": False,
         "created_at": now_utc(),
     }
 
 
+async def check_budget(user: dict, rides: list):
+    """Business rides must fit into the employee's remaining company budget."""
+    total = sum(r["price"] for r in rides if r.get("business"))
+    if total <= 0:
+        return
+    if not user.get("company_id"):
+        raise HTTPException(409, "Vous n'êtes rattaché à aucune entreprise")
+    from routes.company import remaining_budget
+    remaining = await remaining_budget(user)
+    if remaining is not None and total > remaining + 1e-6:
+        raise HTTPException(402, f"Budget professionnel insuffisant : {remaining:.2f} € restants")
+
+
 @router.post("", response_model=RideOut)
 async def create_ride(data: RideCreateIn, user=Depends(require_role("passenger"))):
-    ride = build_ride(data, user)
+    ride = await build_ride(data, user)
+    await check_budget(user, [ride])
     await db.rides.insert_one(ride.copy())
     return ride_to_out(ride)
 
@@ -73,7 +90,8 @@ async def create_ride(data: RideCreateIn, user=Depends(require_role("passenger")
 @router.post("/batch", response_model=List[RideOut])
 async def create_batch(data: RideBatchIn, user=Depends(require_role("passenger"))):
     batch_id = new_id()
-    rides = [build_ride(r, user, batch_id) for r in data.rides]
+    rides = [await build_ride(r, user, batch_id) for r in data.rides]
+    await check_budget(user, rides)
     await db.rides.insert_many([r.copy() for r in rides])
     return [ride_to_out(r) for r in rides]
 
@@ -103,7 +121,7 @@ async def active_rides(user=Depends(current_user)):
 
 
 @router.get("/available", response_model=List[RideOut])
-async def available_rides(user=Depends(require_role("driver"))):
+async def available_rides(user=Depends(working_driver)):
     q = {
         "status": "requested",
         "source": "platform",
@@ -136,7 +154,7 @@ def driver_fields(user: dict) -> dict:
 
 
 @router.post("/{ride_id}/accept", response_model=RideOut)
-async def accept_ride(ride_id: str, user=Depends(require_role("driver"))):
+async def accept_ride(ride_id: str, user=Depends(working_driver)):
     r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
     if not r:
         raise HTTPException(404, "Course introuvable")

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -5,11 +6,19 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
+import CitiesModeration from "@/src/components/CitiesModeration";
+import DriversAdmin from "@/src/components/admin/DriversAdmin";
+import { getNavApp, setNavApp, NavApp } from "@/src/utils/files";
 
 export default function DriverProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [showCities, setShowCities] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [nav, setNav] = useState<NavApp | null>(null);
+  useEffect(() => { getNavApp().then(setNav); }, []);
+  const chooseNav = (a: NavApp) => { setNav(a); setNavApp(a); };
 
   const doLogout = async () => {
     await logout();
@@ -56,7 +65,37 @@ export default function DriverProfile() {
         </View>
       </View>
 
-      <Pressable testID="logout-button" style={styles.logout} onPress={doLogout}>
+            <View style={[styles.menuGroup, { padding: theme.spacing.lg }]} testID="nav-preference">
+        <Text style={{ fontSize: 15, fontWeight: "700", color: theme.color.onSurface, marginBottom: 4 }}>Navigation GPS par défaut</Text>
+        <Text style={{ fontSize: 12, color: theme.color.onSurfaceTertiary, marginBottom: theme.spacing.md }}>Application ouverte par « Aller au client » et « Aller à destination »</Text>
+        <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+          {(["waze", "gmaps"] as NavApp[]).map((a) => (
+            <Pressable key={a} testID={`nav-${a}`} onPress={() => chooseNav(a)} style={{ flex: 1, height: 44, borderRadius: 999, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, backgroundColor: nav === a ? theme.color.brand : theme.color.surface }}>
+              <Icon name={a === "waze" ? "waze" : "google-maps"} size={18} color={nav === a ? "#fff" : theme.color.onSurface} />
+              <Text style={{ fontWeight: "800", fontSize: 13, color: nav === a ? "#fff" : theme.color.onSurface }}>{a === "waze" ? "Waze" : "Google Maps"}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {user.is_moderator && (
+        <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Administration chauffeurs & documents</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <DriversAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} />
+      {user.is_moderator && (
+        <Pressable testID="open-cities-moderation" onPress={() => setShowCities(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="city-variant-outline" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Modération des centres-villes</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <CitiesModeration visible={showCities} onClose={() => setShowCities(false)} />
+
+<Pressable testID="logout-button" style={styles.logout} onPress={doLogout}>
         <Icon name="logout" size={20} color={theme.color.error} />
         <Text style={styles.logoutText}>Se déconnecter</Text>
       </Pressable>
@@ -65,6 +104,7 @@ export default function DriverProfile() {
 }
 
 const styles = StyleSheet.create({
+  menuGroup: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.spacing.xl },
   title: { fontSize: 32, fontWeight: "800", color: theme.color.onSurface, marginBottom: theme.spacing.lg, letterSpacing: -1 },
   card: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.xl, alignItems: "center", marginBottom: theme.spacing.lg },
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center", marginBottom: theme.spacing.md },

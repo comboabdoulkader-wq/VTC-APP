@@ -9,7 +9,9 @@ import { theme } from "@/src/theme";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { POPULAR_PLACES, DEFAULT_PICKUP, Place } from "@/src/data/places";
 import { apiFetch, useAuth } from "@/src/context/auth";
-import RideOptions, { DEFAULT_OPTIONS, RideOptionsValue, Surcharge } from "@/src/components/passenger/RideOptions";
+import RideOptions, { DEFAULT_OPTIONS, RideOptionsValue, Surcharge, Budget } from "@/src/components/passenger/RideOptions";
+import { useMyPosition } from "@/src/hooks/useMyPosition";
+import { useAddressSearch } from "@/src/hooks/useAddressSearch";
 import { money, fmtDateTime, VEHICLE_ICON } from "@/src/utils/format";
 
 type Estimate = { vehicle_type: "standard" | "premium" | "van"; label: string; price: number; distance_km: number; duration_min: number; eta_min: number };
@@ -25,6 +27,7 @@ const toPayload = (it: CartItem) => ({
   passenger_label: it.options.forOther ? it.options.passengerLabel.trim() || "Un proche" : null,
   notes: it.options.notes.trim() || null,
   payment_method: it.options.paymentMethod,
+  business: it.options.business,
 });
 const itemTotal = (it: CartItem) => it.vehicle.price + (it.options.surchargeEnabled ? it.surcharge.amount : 0);
 
@@ -48,6 +51,12 @@ export default function PassengerHome() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [cardEnabled, setCardEnabled] = useState(false);
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const gps = useMyPosition();
+  const { results: geoResults, searching } = useAddressSearch(query, pickup);
+
+  // GPS position becomes the default pickup as soon as it is known
+  useEffect(() => { if (gps.place && pickup.id !== "gps") setPickup(gps.place); }, [gps.place]);
 
   const snapPoints = useMemo(() => ["30%", "62%", "92%"], []);
 
@@ -56,6 +65,7 @@ export default function PassengerHome() {
   useFocusEffect(useCallback(() => {
     let alive = true;
     apiFetch<any[]>("/rides/active-list", {}, token).then((r) => alive && setActiveCount(r.length)).catch(() => {});
+    apiFetch<any>("/company/my-budget", {}, token).then((b) => alive && setBudget(b.company ? b : null)).catch(() => {});
     return () => { alive = false; };
   }, [token]));
 
@@ -65,13 +75,14 @@ export default function PassengerHome() {
     return arr;
   }, [pickup, dropoff]);
 
-  const allPlaces = useMemo(() => [DEFAULT_PICKUP, ...POPULAR_PLACES], []);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const src = searchMode === "pickup" ? allPlaces : POPULAR_PLACES;
-    if (!q) return src;
-    return src.filter((p) => p.name.toLowerCase().includes(q) || p.address.toLowerCase().includes(q));
-  }, [query, searchMode, allPlaces]);
+    const base = searchMode === "pickup" ? [gps.place || DEFAULT_PICKUP, ...POPULAR_PLACES] : POPULAR_PLACES;
+    if (!q) return base;
+    const local = base.filter((p) => p.name.toLowerCase().includes(q) || p.address.toLowerCase().includes(q));
+    const seen = new Set(local.map((p) => p.id));
+    return [...local, ...geoResults.filter((p) => !seen.has(p.id))];
+  }, [query, searchMode, gps.place, geoResults]);
 
   const loadEstimate = async (from: Place, to: Place) => {
     setLoadingEstimate(true);
@@ -98,6 +109,13 @@ export default function PassengerHome() {
     setOptions(DEFAULT_OPTIONS);
     sheetRef.current?.snapToIndex(2);
     await loadEstimate(pickup, p);
+  };
+
+  const useGps = async () => {
+    if (gps.status === "blocked") { gps.openSettings(); return; }
+    if (gps.place) { setPickup(gps.place); setSearchMode("dropoff"); if (dropoff) loadEstimate(gps.place, dropoff); return; }
+    const ok = await gps.request();
+    if (ok) setSearchMode("dropoff");
   };
 
   const reset = () => { setDropoff(null); setEstimates([]); setSelected(null); setSurcharge(null); setOptions(DEFAULT_OPTIONS); setSearchMode("dropoff"); };
@@ -144,8 +162,8 @@ export default function PassengerHome() {
 
       <View style={[styles.topBar, { top: insets.top + theme.spacing.md }]}>
         <Pressable testID="pickup-chip" onPress={() => { setSearchMode("pickup"); setShowCart(false); sheetRef.current?.snapToIndex(2); }} style={styles.locChip}>
-          <Icon name="crosshairs-gps" size={16} color={theme.color.success} />
-          <Text style={styles.locChipText} numberOfLines={1}>{pickup.name}</Text>
+          <Icon name={pickup.id === "gps" ? "crosshairs-gps" : "map-marker"} size={16} color={pickup.id === "gps" ? theme.color.success : theme.color.onSurface} />
+          <Text style={styles.locChipText} numberOfLines={1}>{pickup.id === "gps" ? pickup.address : pickup.name}</Text>
           <Icon name="pencil-outline" size={14} color={theme.color.onSurfaceTertiary} />
         </Pressable>
         {cart.length > 0 && (
@@ -205,16 +223,30 @@ export default function PassengerHome() {
                 <Pressable testID="pickup-cancel" onPress={() => setSearchMode("dropoff")} hitSlop={10}><Icon name="close" size={22} color={theme.color.onSurfaceSecondary} /></Pressable>
               )}
             </View>
+            {searchMode === "pickup" && (
+              <Pressable testID="use-gps" onPress={useGps} style={styles.gpsRow}>
+                <View style={[styles.placeIcon, { backgroundColor: "#EAF6EE" }]}>
+                  {gps.status === "locating" ? <ActivityIndicator size="small" color={theme.color.success} /> : <Icon name="crosshairs-gps" size={22} color={theme.color.success} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.placeName}>{gps.status === "blocked" ? "Localisation bloquée – ouvrir les réglages" : gps.place ? "Utiliser ma position GPS" : "Activer ma position GPS"}</Text>
+                  <Text style={styles.placeAddr} numberOfLines={1}>
+                    {gps.status === "denied" ? "Autorisez la localisation pour être pris en charge exactement où vous êtes" : gps.place ? gps.place.address : "Prise en charge exacte à votre emplacement"}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
             <View style={styles.searchWrap}>
-              <Icon name="magnify" size={20} color={theme.color.onSurfaceTertiary} />
+              {searching ? <ActivityIndicator size="small" color={theme.color.onSurfaceTertiary} /> : <Icon name="magnify" size={20} color={theme.color.onSurfaceTertiary} />}
               <SheetInput testID="destination-search" value={query} onChangeText={setQuery}
-                placeholder={searchMode === "pickup" ? "Adresse de départ" : "Rechercher une adresse"}
+                placeholder={searchMode === "pickup" ? "Adresse de départ (monde entier)" : "Rechercher une adresse, une ville…"}
                 placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.searchInput} onFocus={() => sheetRef.current?.snapToIndex(2)} />
             </View>
             <FlatList data={results} keyExtractor={(item) => item.id} keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={<Text style={styles.placeAddr}>{searching ? "Recherche…" : query.trim().length >= 3 ? "Aucune adresse trouvée" : "Tapez au moins 3 caractères"}</Text>}
               renderItem={({ item }) => (
                 <Pressable testID={`place-${item.id}`} style={styles.placeRow} onPress={() => choosePlace(item)}>
-                  <View style={styles.placeIcon}><Icon name={item.id === "current" ? "crosshairs-gps" : "map-marker-outline"} size={22} color={theme.color.onSurface} /></View>
+                  <View style={styles.placeIcon}><Icon name={item.id === "gps" ? "crosshairs-gps" : item.id === "current" ? "city-variant-outline" : "map-marker-outline"} size={22} color={theme.color.onSurface} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.placeName}>{item.name}</Text>
                     <Text style={styles.placeAddr} numberOfLines={1}>{item.address}</Text>
@@ -256,7 +288,7 @@ export default function PassengerHome() {
             )}
 
             {selected && surcharge && (
-              <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} />
+              <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} budget={budget} />
             )}
 
             <Pressable testID="confirm-ride-button" disabled={!selected || confirming} onPress={orderNow}
@@ -292,6 +324,7 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 22, fontWeight: "800", color: theme.color.onSurface, marginTop: theme.spacing.sm, marginBottom: theme.spacing.md },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 52, marginBottom: theme.spacing.md },
   searchInput: { flex: 1, fontSize: 16, color: theme.color.onSurface, height: "100%" },
+  gpsRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingVertical: theme.spacing.sm, marginBottom: theme.spacing.sm },
   placeRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingVertical: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.color.divider },
   placeIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   placeName: { fontSize: 15, fontWeight: "600", color: theme.color.onSurface },

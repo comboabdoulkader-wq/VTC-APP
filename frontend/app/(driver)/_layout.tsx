@@ -20,6 +20,7 @@ export default function DriverLayout() {
         <Tabs.Screen name="index" options={{ title: "Accueil", tabBarIcon: ({ color, size }) => <Icon name="steering" size={size} color={color} /> }} />
         <Tabs.Screen name="private" options={{ title: "Privées", tabBarIcon: ({ color, size }) => <Icon name="notebook-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="team" options={{ title: "Équipe", tabBarIcon: ({ color, size }) => <Icon name="account-group-outline" size={size} color={color} /> }} />
+        <Tabs.Screen name="documents" options={{ title: "Documents", tabBarIcon: ({ color, size }) => <Icon name="file-check-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="earnings" options={{ title: "Gains", tabBarIcon: ({ color, size }) => <Icon name="wallet-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="profile" options={{ title: "Profil", tabBarIcon: ({ color, size }) => <Icon name="account" size={size} color={color} /> }} />
       </Tabs>

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 4 — BOTH backend and frontend PASS. Backend pytest (test_iteration4.py, 14 tests / 14 passed in 64 s) covers: (1) /api/geo/search worldwide autocomplete (Photon returns Gare de Lyon results with name/address/lat/lng); (2) /api/geo/reverse Lyon 45.764,4.8357 → returns Lyon address; (3) surcharge center_name — Lyon pickup → 'Lyon – centre-ville', Paris pickup → 'Paris – centre-ville'; (4) /api/admin/cities lists 31 seeded (>=30), moderator PATCH sets source='moderator', fresh non-moderator passenger receives 403, moderator can POST + DELETE a city; (5) full company flow: fresh passenger joins with invite code (wrong code → 404), employer PATCH budget 20€/month, cheap business ride 200/business=true, expensive business ride 402 'Budget professionnel insuffisant', company_active=false → business ride 409 'Vous n'êtes rattaché à aucune entreprise', /company/overview + /rides + /employees expose spent+remaining; (6) /team/invoices returns groups/gross/commission/net, /team/export.csv (Content-Type text/csv, header includes 'Date' + 'course') and /team/export.pdf (starts with %PDF) both accept ?token= query without Authorization header, same for /company/report + export.csv + export.pdf; (7) Scheduled reminder loop: create ride scheduled_at=now+30min → within 80 s the passenger receives a notification of type 'reminder' referring to that ride_id (ride then cancelled). Frontend (Expo web 390×844) verified: passenger login → destination-search 'gare montparnasse' → 6 Photon results → picking one shows options, business-toggle displays 'Facturer à Acme Conseil · 60 € restants ce mois', business-switch toggled and total shows 'Course 9.46 € Total · pro 9.46 €'; pickup-chip → use-gps row visible, typing '10 rue de rivoli paris' → 2 Photon results → selection updates pickup chip to '10 Rue de Rivoli'; Profil → company-card 'Acme Conseil · Budget 60.00 € par mois · dépensé 0.00 € · reste 60.00 €', open-cities-moderation opens cities-moderation with 31 rows, tapping a row opens city-editor, city-save + sheet-close both work. Driver chauffeur@test.com → Équipe tab → accounting-export visible with 6 month chips + 1 invoice group (Chauffeur 4 courses 261.15 € — commission 18.00 € — net 243.15 €); clicking export-pdf/export-csv opens URLs containing '/api/team/export.pdf?…&token=…' and '/api/team/export.csv?…&token=…' (captured via window.open shim). entreprise@test.com login → company-dashboard with company-overview + invite-code '424696', accounting-export URLs contain '/api/company/export.pdf' and '/api/company/export.csv'; Employés tab → employees-screen with 1 employee (Passager), opening employee-detail, setting budget-amount=80 + period-week + budget-save → card shows 'Budget 80.00 € par semaine · reste 80.00 €', employee-active-switch toggles OFF then ON, then reset to 60/month (passager left in Acme Conseil with 60€/month as required). Entreprise (profile) tab shows company-invite-code + Se déconnecter button. Fresh company registration (role-company + company-name-input) creates a new company (TestCorp 1788383803, invite '4D4DCA') and lands on company-dashboard with the Employés tab wired.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global", "issues": [
+        "Recurring RN-Web deprecation warning: 'shadow*' style props deprecated → use boxShadow (already flagged in iter-3, still present).",
+        "Recurring React-19 warning: 'Accessing element.ref was removed in React 19' — cosmetic, non-blocking (flagged in iter-3)."
+      ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration4.py",
+    "/app/test_reports/pytest/iteration4.xml"
+  ],
+  "action_items": [
+    "LOW (cosmetic, carry-over from iter-3): migrate remaining 'shadow*' StyleSheet props to boxShadow to silence RN-Web 0.19+ warnings.",
+    "LOW (cosmetic, carry-over from iter-3): investigate the React-19 'element.ref' warning source (probably @gorhom/bottom-sheet or an older nav dep)."
+  ],
+  "critical_code_review_comments": [
+    "auth: current_user reads token from either Authorization header OR ?token= query param → clean pattern that lets Linking.openURL trigger authenticated PDF/CSV downloads directly. Confirmed working for both /team and /company export endpoints.",
+    "core.nearest_city: falls back to reverse_city + insert-into-cities when no seeded center is within 60 km — good self-healing behaviour. Verified indirectly (30+ seeded cities returned; Lyon/Paris both match correctly).",
+    "server.reminder_loop: 60 s sleep + 5-min lookback window is a sensible design; verified end-to-end (30-min-out ride receives reminder within ~1 minute). No risk of duplicate reminders thanks to `reminder_sent`.",
+    "routes.rides.check_budget: correctly returns 409 when a business ride is requested without company_id, and 402 with 'Budget professionnel insuffisant : X.XX € restants' when over budget — both branches exercised and pass.",
+    "routes.company: company_active=false is enforced through current_user (strips company_id), so business rides fail with 409 rather than silently bypassing budget checks — verified.",
+    "routes.geo_routes.moderator dependency correctly gates POST/PATCH/DELETE /admin/cities while GET remains open to any authenticated user."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (14/14 pytest, incl. 45-min reminder end-to-end)", "frontend": "100% (all 5 requested passenger + driver + company web flows)"},
+  "seed_data_creation": "Created one throwaway employee (emp_<ts>@test.com) that joined Acme Conseil, was budget-tested, then deleted. Created and deleted one moderator test city (TESTVILLE_<ts>). Registered a new throwaway company (corp_<ts>@test.com / TestCorp <ts>) for the register-company flow; not cleaned up (kept for regression). Ensured passager@test.com is left in Acme Conseil with budget_amount=60 / budget_period=month / company_active=true as required.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iter-4 spec items pass end-to-end. Backend suite runnable with `pytest backend/tests/test_iteration4.py -v` (uses EXPO_PUBLIC_BACKEND_URL). The reminder test sleeps up to ~80 s per run; keep in mind when re-running. Only remaining polish items are the two cosmetic RN-Web warnings from iter-3 (shadow* + element.ref).",
+  "rca_of_issue": "N/A — no unresolved bugs this iteration."
+}
