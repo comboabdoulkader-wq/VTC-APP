@@ -1,0 +1,186 @@
+{
+  "app_name": "FrenchVTC",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A high-contrast, map-centric interface that prioritizes functional clarity, progressive disclosure, and a premium, trustworthy feel.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#141414",
+    "surfaceSecondary": "#F5F5F5",
+    "onSurfaceSecondary": "#4A4A4A",
+    "surfaceTertiary": "#EAEAEA",
+    "onSurfaceTertiary": "#7A7A7A",
+    "surfaceInverse": "#141414",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#141414",
+    "brandPrimary": "#141414",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#F5F5F5",
+    "onBrandSecondary": "#141414",
+    "brandTertiary": "#EAEAEA",
+    "onBrandTertiary": "#141414",
+    "success": "#2D8C50",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D97736",
+    "onWarning": "#FFFFFF",
+    "error": "#D32F2F",
+    "onError": "#FFFFFF",
+    "border": "#E5E5E5",
+    "borderStrong": "#CCCCCC",
+    "divider": "#F0F0F0",
+    "dark_surface": "#000000",
+    "dark_onSurface": "#FFFFFF",
+    "dark_surfaceSecondary": "#1A1A1A",
+    "dark_onSurfaceSecondary": "#B3B3B3",
+    "dark_surfaceTertiary": "#2C2C2C",
+    "dark_onSurfaceTertiary": "#999999",
+    "dark_surfaceInverse": "#FFFFFF",
+    "dark_onSurfaceInverse": "#000000",
+    "dark_brand": "#FFFFFF",
+    "dark_brandPrimary": "#FFFFFF",
+    "dark_onBrandPrimary": "#000000",
+    "dark_brandSecondary": "#1A1A1A",
+    "dark_onBrandSecondary": "#FFFFFF",
+    "dark_brandTertiary": "#2C2C2C",
+    "dark_onBrandTertiary": "#FFFFFF",
+    "dark_success": "#34A853",
+    "dark_onSuccess": "#000000",
+    "dark_warning": "#F2994A",
+    "dark_onWarning": "#000000",
+    "dark_error": "#EF5350",
+    "dark_onError": "#000000",
+    "dark_border": "#333333",
+    "dark_borderStrong": "#4D4D4D",
+    "dark_divider": "#1F1F1F"
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous padding inside bottom sheets, tight spacing for list items. Floating elements over the map must respect safe areas.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "MaterialCommunityIcons",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use glass on floating map buttons (like back, location, preferences)",
+      "Use glass on bottom sheets if sliding over detailed map",
+      "Use glass on the bottom tab bar as the map scrolls behind it"
+    ],
+    "dont's": [
+      "Do not use glass on primary action buttons like 'Confirm Ride'",
+      "Do not use glass on form inputs"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler",
+    "maps": "react-native-maps"
+  },
+  "screens": [
+    {
+      "name": "Auth",
+      "purpose": "Allow user to log in or register and select their role (Passenger or Driver).",
+      "states": {
+        "loading": "Spinner on primary button.",
+        "empty": "N/A",
+        "error": "Error toast using surfaceInverse for high contrast."
+      },
+      "layout": "Hero image at the top with a vertical gradient scrim blending into the surface. Large bold typography. Two large pill-shaped primary buttons stacked at the bottom: 'Continue as Passenger' and 'Continue as Driver'."
+    },
+    {
+      "name": "PassengerHome",
+      "purpose": "Primary interface to search for a destination and request a ride.",
+      "states": {
+        "loading": "Map loading state, skeleton in bottom sheet.",
+        "empty": "N/A",
+        "error": "Snackbar 'Failed to load map' with retry."
+      },
+      "layout": "Full-screen map using react-native-maps. A floating, pill-shaped 'Where to?' search bar positioned either at the top (below safe area) or bottom. When tapped, a @gorhom/bottom-sheet expands for location search. Upon selecting a destination, the bottom sheet displays a vertical list of ride options (Standard, Premium, Van) with prices. Sticky 'Confirm Ride' button at the bottom of the sheet."
+    },
+    {
+      "name": "PassengerRideTracking",
+      "purpose": "Track active ride, showing driver ETA and details.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-screen map showing route polyline and driver car marker. Bottom sheet pinned at bottom showing driver profile picture, car model, license plate, and ETA. Action buttons for 'Call' and 'Cancel' styled as brandSecondary pills."
+    },
+    {
+      "name": "DriverHome",
+      "purpose": "Driver dashboard to go online and receive ride requests.",
+      "states": {
+        "loading": "Connecting state on GO button.",
+        "empty": "Map empty, offline state.",
+        "error": "Network error banner."
+      },
+      "layout": "Full-screen map. Top floating pill showing today's earnings. A massive, central floating 'GO' button (circular, using brand primary or success green when online). Bottom tab bar. When a request comes in, a modal sheet pops up displaying Level 1 (pickup/dropoff), Level 2 (price, distance) and a massive 'Accept' button with a timeout progress bar."
+    },
+    {
+      "name": "HistoryRatings",
+      "purpose": "Review past rides and rate drivers/passengers.",
+      "states": {
+        "loading": "Skeleton list.",
+        "empty": "Illustration + 'No rides yet'.",
+        "error": "Retry fetching history."
+      },
+      "layout": "List layout with cards showing date, origin-destination, and fare. Rating flow uses a full-screen modal with large star icons, predefined tip chips, and a sticky Submit button at the bottom."
+    }
+  ],
+  "images": {
+    "auth_hero": {
+      "url": "https://images.unsplash.com/photo-1550242499-b5171f56de56?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBjYXIlMjBkcml2aW5nJTIwYXQlMjBuaWdodCUyMGJsdXJyZWQlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc4ODM3NjAwMnww&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1550242499-b5171f56de56?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBjYXIlMjBkcml2aW5nJTIwYXQlMjBuaWdodCUyMGJsdXJyZWQlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc4ODM3NjAwMnww&ixlib=rb-4.1.0&q=85",
+      "alt": "Luxury car blurred driving at night, premium VTC feel"
+    },
+    "premium_car_interior": {
+      "url": "https://images.unsplash.com/photo-1601673632676-12f89e430aa3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBjYXIlMjBpbnRlcmlvciUyMGRheXRpbWUlMjBiYWNrJTIwc2VhdCUyMGxlYXRoZXJ8ZW58MHx8fHwxNzg4Mzc2MDA3fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Premium car interior for ride options"
+    },
+    "driver_profile": {
+      "url": "https://images.unsplash.com/photo-1783899557548-72f4f8476a2f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMG1hbiUyMHN1aXQlMjBzbWlsaW5nJTIwb3V0ZG9vciUyMGNpdHl8ZW58MHx8fHwxNzg4Mzc2MDEyfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Professional driver smiling"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Implement navigation carefully using bottom tabs for both Driver and Passenger, but conditionally render them based on the selected role during authentication.",
+    "Use react-native-maps for the main background of Home screens. Ensure the map occupies flex: 1, and overlay UI elements using absolute positioning with safe area insets.",
+    "Implement the 'Where to?' interaction using @gorhom/bottom-sheet. It should seamlessly expand from a resting state to a full search view.",
+    "The UI must remain strictly monochrome for structure (black, white, greys) with color strictly reserved for signaling (green for online/success, orange for surge). No blue or purple allowed.",
+    "For floating elements over the map (like the back button or 'GO' button), apply subtle shadow tier 1 and glass effect where appropriate to separate from map noise.",
+    "Always apply a vertical gradient scrim (transparent to surfaceInverse) when placing text over the auth_hero image.",
+    "Primary buttons (Confirm Ride, Accept Request) MUST be sticky at the bottom of the screen or bottom sheet, utilizing KeyboardAvoidingView and safe area padding."
+  ]
+}

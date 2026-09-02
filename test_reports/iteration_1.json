@@ -1,0 +1,60 @@
+{
+  "summary": "Comprehensive backend + frontend testing of VTC ride-hailing app (RideGo). Backend: 24/24 pytest tests PASS (100%) covering auth (register/login/me), estimates, full ride lifecycle (create->available->accept->start->complete->rate), role authorization, driver status/earnings, cancel flow. Frontend: Passenger E2E works — welcome screen, registration (name/email/phone/password + role toggle), auto-login to (passenger) tabs, home with stylized map + 'Où allez-vous?' bottom sheet + destination list, estimates screen with 3 vehicle types (Standard/Premium/Van) and correct prices, confirm ride creates ride and navigates to /ride/{id} with 'Recherche d'un chauffeur...' status and Annuler button. One clear UI defect found in tab bar (see frontend_issues).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/(passenger)/_layout.tsx (Tabs)",
+        "issue": "The dynamic route 'ride/[id]' leaks into the bottom Tab Bar and is visible as a fourth tab labeled 'ride/[id]' with a chevron icon on every passenger screen. It should be hidden from tabs. Fix: add a <Tabs.Screen name=\"ride/[id]\" options={{ href: null }} /> entry (or move ride/[id].tsx out of the tabs group, e.g. as a stack route inside (passenger)/ride/[id].tsx with an explicit _layout stack that opts out of Tabs).",
+        "testID": "N/A",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Passenger tabs",
+        "issues": [
+          "Tab labeled 'Courses' is used for ride history — problem statement / spec wording says 'Historique'; not a bug per se, but consider renaming for consistency.",
+          "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' — cosmetic RN Web deprecation warning."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "Root (React 19)",
+        "issue": "Console error: 'Accessing element.ref was removed in React 19. ref is now a regular prop.' Likely emitted from an older RN/Expo dependency; not blocking but should be watched — verify @react-navigation/* and react-native-* versions are compatible with React 19."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_vtc_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Hide 'ride/[id]' from the passenger Tabs layout using <Tabs.Screen name=\"ride/[id]\" options={{ href: null }} />, or restructure so ride/[id] is a stack screen not a tab.",
+    "(Optional) Rename bottom tab 'Courses' to 'Historique' to match spec wording.",
+    "(Optional) Replace deprecated shadow* style props with boxShadow to silence RNW warnings.",
+    "(Optional) Investigate the React 19 element.ref warning source (likely a nested navigation lib) and pin/upgrade if a fix exists."
+  ],
+  "critical_code_review_comments": [
+    "server.py rate average: uses `total = total_rides` after driver's total was already incremented in complete_ride, so the average formula `((prev*(total-1)) + rating)/total` is off-by-one when multiple ratings happen — first rating works correctly (prev=5, total=1 -> new = rating). Consider tracking rated_count separately or updating rating BEFORE incrementing total_rides.",
+    "server.py accept_ride correctly guards against double-accept (409 Conflict). Good.",
+    "server.py get_ride ACL logic uses `r.get('driver_id') or ''` — works but slightly awkward; explicit None-checks would be clearer.",
+    "Frontend uses process.env.EXPO_PUBLIC_BACKEND_URL — correct for Expo public env vars.",
+    "server.py load_dotenv timing looks correct (before os.environ reads)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_vtc_api.py (created)",
+    "/app/test_reports/pytest/pytest_results.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "~95% (all critical passenger flows working; 1 UI defect: ride/[id] visible in tab bar)"},
+  "seed_data_creation": "Created test users via /api/auth/register with prefix test_pax_* and test_drv_* (uuid-suffixed) and a few TEST rides. No production/seed data modified.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green. Register endpoint lowercases email server-side — tests must use lowercase email OR assert against .lower(). pytest.ini forces `-n 2 --dist loadscope`; module-level shared `state` dict works because all tests are in one module and loadscope pins them to one worker, but if you split into multiple files use fixtures instead. Frontend uses EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL). Passenger registration order of inputs is: [Nom, Email, Téléphone, Mot de passe]. Driver role toggle + conditional vehicle_model/license_plate fields not yet UI-tested end-to-end (backend validated). Ride detail polling behavior after driver acceptance also not UI-tested. Main defect to verify after fix: ride/[id] should NOT appear in the passenger tab bar.",
+  "rca_of_issue": "Tab bar shows 'ride/[id]': Expo Router auto-registers every file in the (passenger) group as a Tab entry unless explicitly excluded. The file app/(passenger)/ride/[id].tsx lives inside the tabs group so Expo Router auto-adds it as a tab. Reproduction: register+login as passenger -> observe fourth tab labeled 'ride/[id]' with chevron icon. Fix options: (a) In app/(passenger)/_layout.tsx add <Tabs.Screen name=\"ride/[id]\" options={{ href: null }} />. (b) Move ride/[id].tsx to app/ride/[id].tsx (outside tabs group) and navigate with router.push(`/ride/${id}`). Option (a) is minimal-diff and preserves current file layout."
+}
