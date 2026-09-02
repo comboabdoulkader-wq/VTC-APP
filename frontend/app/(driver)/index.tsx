@@ -7,6 +7,7 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 import { theme } from "@/src/theme";
 import MapCanvas, { MapMarker, LatLng } from "@/src/components/MapCanvas";
 import { getNavApp, setNavApp, openNavigation, NavApp } from "@/src/utils/files";
+import RideChat, { ChatButton } from "@/src/components/RideChat";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { DEFAULT_PICKUP } from "@/src/data/places";
 import { useDriverLocation } from "@/src/hooks/useDriverLocation";
@@ -33,6 +34,7 @@ export default function DriverHome() {
   const [online, setOnline] = useState(false);
   const [route, setRoute] = useState<LatLng[] | null>(null);
   const [routeInfo, setRouteInfo] = useState<{ distance_km: number | null; duration_min: number | null } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const [compliance, setCompliance] = useState<{ blocked: boolean; blocking: string[] } | null>(null);
   const blocked = compliance ? compliance.blocked : !!user?.docs_blocked;
   const [rides, setRides] = useState<Ride[]>([]);
@@ -202,6 +204,8 @@ export default function DriverHome() {
             {routeInfo?.distance_km != null && (
               <Text style={styles.routeInfo}>🛣️ Itinéraire : {routeInfo.distance_km} km · ≈ {routeInfo.duration_min} min</Text>
             )}
+            <ChatButton rideId={activeRide.id} onPress={() => setChatOpen(true)} label={`Écrire à ${activeRide.passenger_label || activeRide.passenger_name}`} />
+            <RideChat rideId={activeRide.id} visible={chatOpen} onClose={() => setChatOpen(false)} title={activeRide.passenger_label || activeRide.passenger_name} canSend />
             <Pressable testID="navigate-button" onPress={() => navigateTo(activeRide.status === "accepted" ? activeRide.pickup : activeRide.dropoff)} style={styles.navBtn}>
               <Icon name="navigation-variant" size={20} color="#fff" />
               <Text style={styles.navText}>{activeRide.status === "accepted" ? "Aller au client" : "Aller à destination"} · Waze / Google Maps</Text>

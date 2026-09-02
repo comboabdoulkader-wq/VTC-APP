@@ -67,3 +67,9 @@ See /app/memory/test_credentials.md
 - Document history: previous versions are archived (never deleted) — `GET /documents/history`, admin detail `history[]` with file links; UI "Historique des documents" (driver) + admin section
 - Reminders J-30 / J-7 / J-1 (`WARN_STEPS`, `warned_days` on document) + expiry/blocked/unblocked alerts sent to the team manager (`alert_supervisors`, notification type `team_document`)
 - Driver profile photo: upload type `profile_photo` → `users.photo_path`; `GET /users/{id}/photo?token=` (any authenticated user); shown to passenger in ride detail (`driver_has_photo`), driver profile avatar with camera button
+
+## Iteration 8 additions
+- In-ride chat: `GET/POST /rides/{id}/messages`, `GET /rides/{id}/messages/unread` (accepted/in_progress only; parties only; notification type `message`); UI RideChat (SheetModal, quick replies, polling 3 s) + ChatButton with unread badge on passenger ride detail and driver active ride
+- Promo codes (`routes/extras.py`): admins create platform-wide codes, companies create employee-only codes (apply only on business rides); percent or fixed amount, max uses, expiry, min price; `POST /promos/validate`; ride creation accepts `promo_code` → `discount_amount`, price reduced; UI PromosManager (company profile + moderator profiles) and promo input in RideOptions + breakdown
+- Pricing zones: `cities.price_multiplier` (0.5–3.0) editable by moderators in CitiesModeration; estimate/ride base price × multiplier; ride stores `price_multiplier`, `city_name`
+- Tips: rating box offers tip chips (0/1/2/5/10 €); `POST /rides/{id}/rate {rating, tip}`; card rides → Stripe checkout `kind: "tip"` (payments keyed by ride_id+kind), `tip_paid`, driver notified; cash tips recorded; earnings already include tips

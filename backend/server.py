@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core import REMINDER_MIN, client, db, notify, now_utc, seed_cities
-from routes import auth, company, documents, driver, geo_routes, notifications, payments, rides, team
+from routes import auth, company, documents, driver, extras, geo_routes, notifications, payments, rides, team
 from routes.documents import compliance_sweep
 from storage import init_storage
 
@@ -22,7 +22,7 @@ async def root():
     return {"message": "VTC API", "status": "ok"}
 
 
-for r in (auth.router, rides.router, driver.router, team.router, payments.router, notifications.router, company.router, geo_routes.router, documents.router):
+for r in (auth.router, rides.router, driver.router, team.router, payments.router, notifications.router, company.router, geo_routes.router, documents.router, extras.router):
     api.include_router(r)
 
 app.include_router(api)

@@ -6,7 +6,7 @@ import { theme } from "@/src/theme";
 import SheetModal from "@/src/components/ui/SheetModal";
 import { apiFetch, useAuth } from "@/src/context/auth";
 
-type City = { id: string; name: string; country?: string | null; lat: number; lng: number; source: string };
+type City = { id: string; name: string; country?: string | null; lat: number; lng: number; source: string; price_multiplier?: number };
 
 /** Moderator tool: list / edit / add city centers used for the distance surcharge worldwide. */
 export default function CitiesModeration({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -26,7 +26,7 @@ export default function CitiesModeration({ visible, onClose }: { visible: boolea
     if (!editing?.name || editing.lat == null || editing.lng == null || isNaN(Number(editing.lat)) || isNaN(Number(editing.lng))) { Alert.alert("Champs invalides", "Nom, latitude et longitude sont requis"); return; }
     setSaving(true);
     try {
-      const body = { name: editing.name, country: editing.country || null, lat: Number(editing.lat), lng: Number(editing.lng) };
+      const body = { name: editing.name, country: editing.country || null, lat: Number(editing.lat), lng: Number(editing.lng), price_multiplier: Number(editing.price_multiplier ?? 1) || 1 };
       if (editing.id) await apiFetch(`/admin/cities/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) }, token);
       else await apiFetch("/admin/cities", { method: "POST", body: JSON.stringify(body) }, token);
       setEditing(null); load();
@@ -39,7 +39,7 @@ export default function CitiesModeration({ visible, onClose }: { visible: boolea
     <SheetModal visible={visible} onClose={onClose} title="Centres-villes" subtitle="Référence pour la rallonge 1,20 €/km · monde entier" testID="cities-moderation">
       <View style={styles.row}>
         <TextInput testID="city-filter" value={filter} onChangeText={setFilter} placeholder="Rechercher une ville" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.input, { flex: 1 }]} />
-        <Pressable testID="city-add" onPress={() => setEditing({ name: "", country: "", lat: undefined, lng: undefined })} style={styles.addBtn}><Icon name="plus" size={22} color="#fff" /></Pressable>
+        <Pressable testID="city-add" onPress={() => setEditing({ name: "", country: "", lat: undefined, lng: undefined, price_multiplier: 1 })} style={styles.addBtn}><Icon name="plus" size={22} color="#fff" /></Pressable>
       </View>
 
       {editing && (
@@ -51,6 +51,8 @@ export default function CitiesModeration({ visible, onClose }: { visible: boolea
             <TextInput testID="city-lat" value={editing.lat == null ? "" : String(editing.lat)} onChangeText={(t) => setEditing({ ...editing, lat: t as any })} placeholder="Latitude" keyboardType="numeric" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.input, { flex: 1 }]} />
             <TextInput testID="city-lng" value={editing.lng == null ? "" : String(editing.lng)} onChangeText={(t) => setEditing({ ...editing, lng: t as any })} placeholder="Longitude" keyboardType="numeric" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.input, { flex: 1 }]} />
           </View>
+          <Text style={{ fontSize: 12, color: theme.color.onSurfaceSecondary, marginBottom: 4 }}>Coefficient tarifaire (1 = tarif de base, 1.2 = +20 %, 0.8 = −20 %)</Text>
+          <TextInput testID="city-multiplier" value={editing.price_multiplier == null ? "1" : String(editing.price_multiplier)} onChangeText={(t) => setEditing({ ...editing, price_multiplier: t as any })} placeholder="1.0" keyboardType="decimal-pad" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
           <View style={styles.row}>
             <Pressable onPress={() => setEditing(null)} style={styles.ghost}><Text style={styles.ghostText}>Annuler</Text></Pressable>
             <Pressable testID="city-save" onPress={save} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.6 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Enregistrer</Text>}</Pressable>
@@ -63,7 +65,7 @@ export default function CitiesModeration({ visible, onClose }: { visible: boolea
           <Icon name="city-variant-outline" size={20} color={theme.color.onSurfaceSecondary} />
           <View style={{ flex: 1 }}>
             <Text style={styles.cityName}>{c.name}{c.country ? `, ${c.country}` : ""}</Text>
-            <Text style={styles.cityMeta}>{c.lat.toFixed(4)}, {c.lng.toFixed(4)} · {c.source === "auto" ? "détectée automatiquement" : c.source === "moderator" ? "modifiée par un modérateur" : "par défaut"}</Text>
+            <Text style={styles.cityMeta}>{c.lat.toFixed(4)}, {c.lng.toFixed(4)} · tarif ×{(c.price_multiplier ?? 1).toFixed(2)} · {c.source === "auto" ? "détectée automatiquement" : c.source === "moderator" ? "modifiée par un modérateur" : "par défaut"}</Text>
           </View>
           <Icon name="pencil-outline" size={18} color={theme.color.onSurfaceTertiary} />
         </Pressable>

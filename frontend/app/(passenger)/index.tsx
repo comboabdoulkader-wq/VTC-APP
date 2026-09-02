@@ -28,8 +28,9 @@ const toPayload = (it: CartItem) => ({
   notes: it.options.notes.trim() || null,
   payment_method: it.options.paymentMethod,
   business: it.options.business,
+  promo_code: it.options.promoCode || null,
 });
-const itemTotal = (it: CartItem) => it.vehicle.price + (it.options.surchargeEnabled ? it.surcharge.amount : 0);
+const itemTotal = (it: CartItem) => Math.max(it.vehicle.price + (it.options.surchargeEnabled ? it.surcharge.amount : 0) - (it.options.promoCode ? it.options.discount : 0), 0);
 
 export default function PassengerHome() {
   const insets = useSafeAreaInsets();
@@ -295,7 +296,7 @@ export default function PassengerHome() {
               style={({ pressed }) => [styles.confirmBtn, (!selected || confirming) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}>
               {confirming ? <ActivityIndicator color="#fff" /> : (
                 <Text style={styles.confirmText}>
-                  {options.scheduledAt ? "Programmer" : "Commander"} {selected ? `• ${money(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0))}` : ""}
+                  {options.scheduledAt ? "Programmer" : "Commander"} {selected ? `• ${money(Math.max(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0) - (options.promoCode ? options.discount : 0), 0))}` : ""}
                 </Text>
               )}
             </Pressable>

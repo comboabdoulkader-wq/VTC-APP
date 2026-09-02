@@ -152,3 +152,7 @@ agent_communication:
 ## Iteration 6 – Driver documents / blocking / selfie / navigation (main agent)
 backend: routes/documents.py (+storage.py), working_driver dependency (423 when docs_blocked) on /rides/available, /rides/accept, /driver/status online; hourly compliance_loop; /geo/route (OSRM). Smoke-tested manually: upload, N/A, block/unblock, selfie request+review, file download, reject→block.
 frontend: (driver)/documents.tsx tab, admin console src/components/admin/DriversAdmin.tsx (profiles), driver home blocked banner + navigate-button + route polyline, driver profile nav-preference.
+
+## Iteration 8 – Chat, promos, pricing zones, tips (main agent)
+backend: routes/extras.py (chat + promos), price_multiplier on cities applied in estimate/build_ride, promo_code in RideCreateIn, tip checkout kind in payments. Smoke tested manually (all OK).
+frontend: RideChat + ChatButton (passenger ride detail, driver home), PromosManager (profiles), promo input in RideOptions, tip chips in rating box, city multiplier field in CitiesModeration.

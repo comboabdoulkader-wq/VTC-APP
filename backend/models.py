@@ -87,6 +87,8 @@ class SurchargeOut(BaseModel):
     amount: float
     center_name: str
     city_id: Optional[str] = None
+    city_name: Optional[str] = None
+    price_multiplier: float = 1.0
 
 
 class EstimateOut(BaseModel):
@@ -104,6 +106,7 @@ class RideCreateIn(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=300)
     payment_method: PaymentMethod = "cash"
     business: bool = False
+    promo_code: Optional[str] = Field(default=None, max_length=20)
 
 
 class RideBatchIn(BaseModel):
@@ -150,6 +153,11 @@ class RideOut(BaseModel):
     commission_rate: float = 0
     commission_amount: float = 0
     business: bool = False
+    promo_code: Optional[str] = None
+    discount_amount: float = 0
+    price_multiplier: float = 1.0
+    city_name: Optional[str] = None
+    tip_paid: bool = False
     assigned_by_name: Optional[str] = None
     created_at: datetime
     accepted_at: Optional[datetime] = None
@@ -229,6 +237,7 @@ class TeamMemberOut(UserOut):
 # ---- Payments ----
 class CheckoutIn(BaseModel):
     return_url: Optional[str] = None
+    kind: Literal["ride", "tip"] = "ride"
 
 
 class NotificationOut(BaseModel):
@@ -264,6 +273,7 @@ class CityIn(BaseModel):
     country: Optional[str] = None
     lat: float
     lng: float
+    price_multiplier: float = Field(default=1.0, ge=0.5, le=3.0)
 
 
 class CityUpdateIn(BaseModel):
@@ -271,6 +281,7 @@ class CityUpdateIn(BaseModel):
     country: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    price_multiplier: Optional[float] = Field(default=None, ge=0.5, le=3.0)
 
 
 class CityOut(BaseModel):
@@ -280,3 +291,4 @@ class CityOut(BaseModel):
     lat: float
     lng: float
     source: str = "default"
+    price_multiplier: float = 1.0

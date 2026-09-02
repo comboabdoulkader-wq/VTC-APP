@@ -121,6 +121,8 @@ async def surcharge_for(pickup: dict) -> dict:
         "amount": round(km * SURCHARGE_PER_KM, 2),
         "center_name": f"{center['name']} – centre-ville",
         "city_id": center.get("id"),
+        "city_name": center.get("name"),
+        "price_multiplier": float(center.get("price_multiplier") or 1.0),
     }
 
 

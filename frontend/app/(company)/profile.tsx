@@ -8,6 +8,7 @@ import { theme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
+import PromosManager from "@/src/components/PromosManager";
 
 export default function CompanyProfile() {
   const insets = useSafeAreaInsets();
@@ -15,6 +16,7 @@ export default function CompanyProfile() {
   const { user, logout } = useAuth();
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPromos, setShowPromos] = useState(false);
 
   if (!user) return null;
   return (
@@ -37,6 +39,12 @@ export default function CompanyProfile() {
         <Text style={styles.infoText}>Chaque employé réserve en autonomie dans la limite de son budget (jour, semaine ou mois). Vous suivez coûts, trajets et horaires en temps réel et exportez les relevés mensuels.</Text>
       </View>
 
+      <Pressable testID="open-promos" onPress={() => setShowPromos(true)} style={styles.menu}>
+        <Icon name="ticket-percent-outline" size={22} color={theme.color.onSurface} />
+        <Text style={styles.menuLabel}>Codes promo employés</Text>
+        <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+      </Pressable>
+      <PromosManager visible={showPromos} onClose={() => setShowPromos(false)} />
       {user.is_moderator && (
         <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={styles.menu}>
           <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />

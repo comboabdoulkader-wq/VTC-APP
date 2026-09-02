@@ -35,11 +35,20 @@ async def create_checkout(ride_id: str, body: CheckoutIn, user=Depends(require_r
     ride = await db.rides.find_one({"id": ride_id, "passenger_id": user["id"]}, {"_id": 0})
     if not ride:
         raise HTTPException(404, "Course introuvable")
-    if ride.get("payment_status") == "paid":
-        raise HTTPException(409, "Course déjà payée")
     if ride["status"] == "cancelled":
         raise HTTPException(409, "Course annulée")
-    amount = int(round(ride["price"] * 100))
+    if body.kind == "tip":
+        if not ride.get("tip") or ride["tip"] <= 0:
+            raise HTTPException(409, "Aucun pourboire à régler")
+        if ride.get("tip_paid"):
+            raise HTTPException(409, "Pourboire déjà réglé")
+        amount = int(round(ride["tip"] * 100))
+        label = f"Pourboire pour {ride.get('driver_name') or 'votre chauffeur'}"
+    else:
+        if ride.get("payment_status") == "paid":
+            raise HTTPException(409, "Course déjà payée")
+        amount = int(round(ride["price"] * 100))
+        label = f"Course VTC → {ride['dropoff']['address'][:60]}"
     return_url = allowed_return_url(body.return_url)
     sep = "&" if "?" in return_url else "?"
     try:
@@ -48,37 +57,43 @@ async def create_checkout(ride_id: str, body: CheckoutIn, user=Depends(require_r
             line_items=[{
                 "price_data": {
                     "currency": "eur",
-                    "product_data": {"name": f"Course VTC → {ride['dropoff']['address'][:60]}"},
+                    "product_data": {"name": label},
                     "unit_amount": amount,
                 },
                 "quantity": 1,
             }],
-            success_url=f"{return_url}{sep}ride_id={ride_id}&session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{return_url}{sep}ride_id={ride_id}&cancelled=1",
+            success_url=f"{return_url}{sep}ride_id={ride_id}&kind={body.kind}&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{return_url}{sep}ride_id={ride_id}&kind={body.kind}&cancelled=1",
             client_reference_id=ride_id,
-            metadata={"ride_id": ride_id, "user_id": user["id"]},
+            metadata={"ride_id": ride_id, "user_id": user["id"], "kind": body.kind},
             customer_email=user["email"],
         )
     except stripe.StripeError as exc:
         log.error("Stripe error: %s", exc)
         raise HTTPException(502, f"Stripe indisponible : {getattr(exc, 'user_message', None) or str(exc)}")
     await db.payments.update_one(
-        {"ride_id": ride_id},
-        {"$set": {"ride_id": ride_id, "user_id": user["id"], "amount_cents": amount, "currency": "eur",
+        {"ride_id": ride_id, "kind": body.kind},
+        {"$set": {"ride_id": ride_id, "kind": body.kind, "user_id": user["id"], "amount_cents": amount, "currency": "eur",
                   "status": "pending", "checkout_session_id": session.id, "updated_at": now_utc()},
          "$setOnInsert": {"created_at": now_utc()}},
         upsert=True,
     )
-    await db.rides.update_one({"id": ride_id}, {"$set": {"payment_status": "pending", "payment_method": "card"}})
+    if body.kind == "ride":
+        await db.rides.update_one({"id": ride_id}, {"$set": {"payment_status": "pending", "payment_method": "card"}})
     return {"checkout_url": session.url, "session_id": session.id}
 
 
-async def mark_paid(ride_id: str, payment_intent: Optional[str], session_id: str):
+async def mark_paid(ride_id: str, payment_intent: Optional[str], session_id: str, kind: str = "ride"):
     await db.payments.update_one(
-        {"ride_id": ride_id},
+        {"ride_id": ride_id, "kind": kind},
         {"$set": {"status": "paid", "stripe_payment_intent": payment_intent, "checkout_session_id": session_id, "paid_at": now_utc()}},
     )
     ride = await db.rides.find_one({"id": ride_id}, {"_id": 0})
+    if kind == "tip":
+        if ride and not ride.get("tip_paid"):
+            await db.rides.update_one({"id": ride_id}, {"$set": {"tip_paid": True}})
+            await notify(ride.get("driver_id"), "paid", "Pourboire reçu 🎉", f"{ride.get('tip', 0):.2f} € de {ride['passenger_name']}", ride_id)
+        return
     if ride and ride.get("payment_status") != "paid":
         await db.rides.update_one({"id": ride_id}, {"$set": {"payment_status": "paid", "payment_method": "card"}})
         await notify(ride.get("passenger_id"), "paid", "Paiement confirmé", f"{ride['price']:.2f} € réglés par carte", ride_id)
@@ -86,13 +101,23 @@ async def mark_paid(ride_id: str, payment_intent: Optional[str], session_id: str
 
 
 @router.get("/status/{ride_id}")
-async def payment_status(ride_id: str, user=Depends(current_user)):
+async def payment_status(ride_id: str, kind: str = "ride", user=Depends(current_user)):
     ride = await db.rides.find_one({"id": ride_id}, {"_id": 0})
     if not ride:
         raise HTTPException(404, "Course introuvable")
     if user["id"] not in (ride.get("passenger_id"), ride.get("driver_id")):
         raise HTTPException(403, "Forbidden")
-    payment = await db.payments.find_one({"ride_id": ride_id}, {"_id": 0})
+    payment = await db.payments.find_one({"ride_id": ride_id, "kind": kind}, {"_id": 0}) or (await db.payments.find_one({"ride_id": ride_id, "kind": {"$exists": False}}, {"_id": 0}) if kind == "ride" else None)
+    if kind == "tip":
+        if payment and payment["status"] == "pending" and payment.get("checkout_session_id") and STRIPE_SECRET_KEY:
+            try:
+                session = stripe.checkout.Session.retrieve(payment["checkout_session_id"])
+                if session.get("payment_status") == "paid":
+                    await mark_paid(ride_id, session.get("payment_intent"), session["id"], "tip")
+                    return {"ride_id": ride_id, "kind": "tip", "status": "paid"}
+            except stripe.StripeError as exc:
+                log.warning("Stripe retrieve failed: %s", exc)
+        return {"ride_id": ride_id, "kind": "tip", "status": "paid" if ride.get("tip_paid") else (payment["status"] if payment else "unpaid")}
     # Without a webhook secret we confirm directly with Stripe when the client returns.
     if payment and payment["status"] == "pending" and payment.get("checkout_session_id") and STRIPE_SECRET_KEY:
         try:
@@ -120,7 +145,7 @@ async def stripe_webhook(request: Request):
     await db.webhook_events.insert_one({"event_id": event["id"], "type": event["type"], "received_at": now_utc()})
     obj = event["data"]["object"]
     if event["type"] == "checkout.session.completed" and obj.get("payment_status") == "paid":
-        ride_id = (obj.get("metadata") or {}).get("ride_id")
-        if ride_id:
-            await mark_paid(ride_id, obj.get("payment_intent"), obj["id"])
+        meta = obj.get("metadata") or {}
+        if meta.get("ride_id"):
+            await mark_paid(meta["ride_id"], obj.get("payment_intent"), obj["id"], meta.get("kind", "ride"))
     return {"ok": True}

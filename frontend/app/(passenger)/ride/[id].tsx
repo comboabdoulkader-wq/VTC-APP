@@ -10,6 +10,7 @@ import { theme } from "@/src/theme";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { money, fmtDateTime } from "@/src/utils/format";
+import RideChat, { ChatButton } from "@/src/components/RideChat";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -33,6 +34,8 @@ export default function RideDetail() {
   const [rating, setRating] = useState(5);
   const [submittingRate, setSubmittingRate] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [tip, setTip] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -56,23 +59,28 @@ export default function RideDetail() {
   const submitRating = async () => {
     setSubmittingRate(true);
     try {
-      await apiFetch(`/rides/${id}/rate`, { method: "POST", body: JSON.stringify({ rating, tip: 0 }) }, token);
+      await apiFetch(`/rides/${id}/rate`, { method: "POST", body: JSON.stringify({ rating, tip }) }, token);
+      if (tip > 0 && ride?.payment_method === "card") {
+        await checkout("tip");
+      }
       router.replace("/(passenger)/rides");
     } catch {} finally { setSubmittingRate(false); }
   };
 
+  const checkout = async (kind: "ride" | "tip") => {
+    const returnUrl = Linking.createURL("payment-result");
+    const { checkout_url } = await apiFetch<{ checkout_url: string }>(`/payments/checkout/${id}`, {
+      method: "POST", body: JSON.stringify({ return_url: returnUrl, kind }),
+    }, token);
+    await WebBrowser.openAuthSessionAsync(checkout_url, returnUrl);
+    const st = await apiFetch<{ status: string }>(`/payments/status/${id}?kind=${kind}`, {}, token);
+    if (st.status === "paid") Alert.alert("Paiement confirmé", kind === "tip" ? "Merci pour votre pourboire !" : "Votre course est réglée par carte.");
+  };
+
   const payByCard = async () => {
     setPaying(true);
-    try {
-      const returnUrl = Linking.createURL("payment-result");
-      const { checkout_url } = await apiFetch<{ checkout_url: string }>(`/payments/checkout/${id}`, {
-        method: "POST", body: JSON.stringify({ return_url: returnUrl }),
-      }, token);
-      await WebBrowser.openAuthSessionAsync(checkout_url, returnUrl);
-      const st = await apiFetch<{ status: string }>(`/payments/status/${id}`, {}, token);
-      if (st.status === "paid") Alert.alert("Paiement confirmé", "Votre course est réglée par carte.");
-      load();
-    } catch (e: any) { Alert.alert("Paiement", e.message || "Impossible d'ouvrir le paiement"); } finally { setPaying(false); }
+    try { await checkout("ride"); load(); }
+    catch (e: any) { Alert.alert("Paiement", e.message || "Impossible d'ouvrir le paiement"); } finally { setPaying(false); }
   };
 
   if (loading || !ride) {
@@ -159,6 +167,11 @@ export default function RideDetail() {
             </View>
           ) : null}
 
+          {ride.driver_id && ["accepted", "in_progress"].includes(ride.status) && (
+            <ChatButton rideId={ride.id} onPress={() => setChatOpen(true)} label={`Écrire à ${ride.driver_name}`} />
+          )}
+          <RideChat rideId={ride.id} visible={chatOpen} onClose={() => setChatOpen(false)} title={ride.driver_name || "Chauffeur"} canSend={["accepted", "in_progress"].includes(ride.status)} />
+
           <View style={styles.routeBox}>
             <View style={styles.routeRow}><View style={[styles.dot, { backgroundColor: theme.color.success }]} /><Text style={styles.routeText} numberOfLines={1}>{ride.pickup.address}</Text></View>
             <View style={styles.line} />
@@ -170,6 +183,12 @@ export default function RideDetail() {
             <View style={styles.priceRow}><Text style={styles.priceLabel}>Course ({ride.distance_km.toFixed(1)} km)</Text><Text style={styles.priceSmall}>{money(ride.base_price)}</Text></View>
             {ride.surcharge_enabled && (
               <View style={styles.priceRow}><Text style={styles.priceLabel}>Rallonge ({ride.surcharge_km} km × 1,20 €)</Text><Text style={styles.priceSmall}>+{money(ride.surcharge_amount)}</Text></View>
+            )}
+            {ride.discount_amount > 0 && (
+              <View style={styles.priceRow}><Text style={[styles.priceLabel, { color: theme.color.success }]}>Code {ride.promo_code}</Text><Text style={[styles.priceSmall, { color: theme.color.success }]}>−{money(ride.discount_amount)}</Text></View>
+            )}
+            {ride.tip > 0 && (
+              <View style={styles.priceRow}><Text style={styles.priceLabel}>Pourboire {ride.tip_paid ? "(payé par carte)" : ride.payment_method === "cash" ? "(en espèces)" : ""}</Text><Text style={styles.priceSmall}>+{money(ride.tip)}</Text></View>
             )}
             <View style={[styles.priceRow, { marginTop: 4 }]}>
               <Text style={styles.priceTotalLabel}>Total</Text>
@@ -204,8 +223,16 @@ export default function RideDetail() {
                   </Pressable>
                 ))}
               </View>
+              <Text style={styles.tipLabel}>Ajouter un pourboire {ride.payment_method === "card" ? "(payé par carte)" : "(remis en espèces)"}</Text>
+              <View style={styles.tipRow}>
+                {[0, 1, 2, 5, 10].map((t) => (
+                  <Pressable key={t} testID={`tip-${t}`} onPress={() => setTip(t)} style={[styles.tipChip, tip === t && styles.tipChipActive]}>
+                    <Text style={[styles.tipText, tip === t && { color: "#fff" }]}>{t === 0 ? "Aucun" : `${t} €`}</Text>
+                  </Pressable>
+                ))}
+              </View>
               <Pressable testID="submit-rating" onPress={submitRating} disabled={submittingRate} style={({ pressed }) => [styles.primary, { marginTop: 0 }, pressed && { opacity: 0.85 }, submittingRate && { opacity: 0.7 }]}>
-                {submittingRate ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Envoyer</Text>}
+                {submittingRate ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{tip > 0 ? `Envoyer et donner ${money(tip)}` : "Envoyer"}</Text>}
               </Pressable>
             </View>
           )}
@@ -262,7 +289,12 @@ const styles = StyleSheet.create({
   payText: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   rateBox: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.lg, marginBottom: theme.spacing.lg, alignItems: "center" },
   rateTitle: { fontSize: 16, fontWeight: "700", marginBottom: theme.spacing.md, color: theme.color.onSurface },
-  stars: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
+  stars: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  tipLabel: { fontSize: 13, fontWeight: "700", color: theme.color.onSurfaceSecondary, marginBottom: theme.spacing.sm },
+  tipRow: { flexDirection: "row", gap: 6, marginBottom: theme.spacing.lg, flexWrap: "wrap", justifyContent: "center" },
+  tipChip: { paddingHorizontal: theme.spacing.md, height: 36, borderRadius: theme.radius.pill, backgroundColor: theme.color.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.color.border },
+  tipChipActive: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
+  tipText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   primary: { backgroundColor: theme.color.brand, height: 50, paddingHorizontal: theme.spacing.xl, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", alignSelf: "stretch", marginBottom: theme.spacing.md },
   primaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
   cancelBtn: { height: 52, borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },

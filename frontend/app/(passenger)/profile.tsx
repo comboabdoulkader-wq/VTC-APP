@@ -8,6 +8,7 @@ import { theme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
+import PromosManager from "@/src/components/PromosManager";
 import CompanyJoinCard from "@/src/components/CompanyJoinCard";
 
 export default function Profile() {
@@ -16,6 +17,7 @@ export default function Profile() {
   const { user, logout } = useAuth();
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPromos, setShowPromos] = useState(false);
 
   const doLogout = async () => {
     await logout();
@@ -62,6 +64,14 @@ export default function Profile() {
 
             <CompanyJoinCard />
 
+      {user.is_moderator && (
+        <Pressable testID="open-promos" onPress={() => setShowPromos(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="ticket-percent-outline" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Codes promo plateforme</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <PromosManager visible={showPromos} onClose={() => setShowPromos(false)} />
       {user.is_moderator && (
         <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
           <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />

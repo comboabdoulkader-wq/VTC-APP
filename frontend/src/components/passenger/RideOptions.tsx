@@ -6,6 +6,7 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 import { theme } from "@/src/theme";
 import DateTimeChips from "@/src/components/ui/DateTimeChips";
 import { money } from "@/src/utils/format";
+import { apiFetch, useAuth } from "@/src/context/auth";
 
 // BottomSheetTextInput relies on native TextInput.State APIs that don't exist on web.
 const SheetInput: any = Platform.OS === "web" ? TextInput : BottomSheetTextInput;
@@ -23,10 +24,12 @@ export type RideOptionsValue = {
   notes: string;
   paymentMethod: "cash" | "card";
   business: boolean;
+  promoCode: string;
+  discount: number;
 };
 
 export const DEFAULT_OPTIONS: RideOptionsValue = {
-  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash", business: false,
+  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash", business: false, promoCode: "", discount: 0,
 };
 
 type Props = {
@@ -40,7 +43,18 @@ type Props = {
 
 export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled, budget }: Props) {
   const set = (patch: Partial<RideOptionsValue>) => onChange({ ...value, ...patch });
-  const total = basePrice + (value.surchargeEnabled && surcharge ? surcharge.amount : 0);
+  const { token } = useAuth();
+  const [promoInput, setPromoInput] = React.useState("");
+  const [promoError, setPromoError] = React.useState<string | null>(null);
+  const subtotal = basePrice + (value.surchargeEnabled && surcharge ? surcharge.amount : 0);
+  const total = Math.max(subtotal - (value.promoCode ? value.discount : 0), 0);
+  const applyPromo = async () => {
+    setPromoError(null);
+    try {
+      const r = await apiFetch<any>("/promos/validate", { method: "POST", body: JSON.stringify({ code: promoInput, price: subtotal }) }, token);
+      set({ promoCode: r.code, discount: r.discount });
+    } catch (e: any) { setPromoError(e.message); set({ promoCode: "", discount: 0 }); }
+  };
 
   return (
     <View>
@@ -144,6 +158,24 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
         </Pressable>
       </View>
 
+      {/* Code promo */}
+      <Text style={styles.label}><Icon name="ticket-percent-outline" size={14} /> Code promo</Text>
+      {value.promoCode ? (
+        <View style={[styles.card, { marginTop: 0 }, styles.cardActive]} testID="promo-applied">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: theme.spacing.md }}>
+            <Icon name="check-decagram" size={22} color={theme.color.success} />
+            <Text style={[styles.cardTitle, { flex: 1 }]}>{value.promoCode} · −{money(value.discount)}</Text>
+            <Pressable testID="promo-remove" onPress={() => { set({ promoCode: "", discount: 0 }); setPromoInput(""); }} hitSlop={8}><Icon name="close" size={20} color={theme.color.onSurfaceSecondary} /></Pressable>
+          </View>
+        </View>
+      ) : (
+        <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+          <SheetInput testID="promo-input" value={promoInput} onChangeText={(t: string) => setPromoInput(t.toUpperCase())} placeholder="Entrez un code" autoCapitalize="characters" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.input, { flex: 1, marginTop: 0 }]} />
+          <Pressable testID="promo-apply" onPress={applyPromo} disabled={promoInput.length < 3} style={[styles.chip, { height: 48, backgroundColor: theme.color.brand }, promoInput.length < 3 && { opacity: 0.5 }]}><Text style={[styles.chipText, { color: "#fff" }]}>Appliquer</Text></Pressable>
+        </View>
+      )}
+      {promoError ? <Text style={{ color: theme.color.error, fontSize: 12, marginTop: 4 }}>{promoError}</Text> : null}
+
       {/* Notes */}
       <Text style={styles.label}><Icon name="note-text-outline" size={14} /> Infos pour le chauffeur</Text>
       <SheetInput
@@ -161,6 +193,7 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
         {value.surchargeEnabled && surcharge && (
           <View style={styles.totalRow}><Text style={styles.totalLabel}>Rallonge ({surcharge.distance_to_center_km.toFixed(1)} km)</Text><Text style={styles.totalVal}>+{money(surcharge.amount)}</Text></View>
         )}
+        {value.promoCode ? <View style={styles.totalRow}><Text style={[styles.totalLabel, { color: theme.color.success }]}>Code {value.promoCode}</Text><Text style={[styles.totalVal, { color: theme.color.success }]}>−{money(value.discount)}</Text></View> : null}
         <View style={[styles.totalRow, styles.totalFinal]}>
           <Text style={styles.totalFinalLabel}>Total {value.scheduledAt ? "· programmée" : ""}{value.business ? " · pro" : ""}</Text>
           <Text style={styles.totalFinalVal}>{money(total)}</Text>

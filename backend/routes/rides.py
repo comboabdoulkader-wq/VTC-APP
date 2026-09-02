@@ -18,22 +18,31 @@ ACTIVE = ["requested", "accepted", "in_progress"]
 async def estimate(data: EstimateIn):
     pickup, dropoff = data.pickup.model_dump(), data.dropoff.model_dump()
     dist, duration = trip_metrics(pickup, dropoff)
+    sur = await surcharge_for(pickup)
+    mult = sur["price_multiplier"]
     options = [
         VehicleEstimate(
-            vehicle_type=vt, label=cfg["label"], price=base_fare(vt, dist, duration),
+            vehicle_type=vt, label=cfg["label"], price=round(base_fare(vt, dist, duration) * mult, 2),
             distance_km=dist, duration_min=duration, eta_min=cfg["eta"],
         )
         for vt, cfg in VEHICLE_PRICING.items()
     ]
-    return EstimateOut(options=options, surcharge=await surcharge_for(pickup))
+    return EstimateOut(options=options, surcharge=sur)
 
 
 async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = None) -> dict:
     pickup, dropoff = data.pickup.model_dump(), data.dropoff.model_dump()
     dist, duration = trip_metrics(pickup, dropoff)
-    base = base_fare(data.vehicle_type, dist, duration)
-    sur = await surcharge_for(pickup) if data.surcharge_enabled else None
+    city = await surcharge_for(pickup)
+    base = round(base_fare(data.vehicle_type, dist, duration) * city["price_multiplier"], 2)
+    sur = city if data.surcharge_enabled else None
     sur_amount = sur["amount"] if sur else 0.0
+    discount, promo_code = 0.0, None
+    if data.promo_code:
+        from routes.extras import resolve_promo
+        res = await resolve_promo(data.promo_code, user, round(base + sur_amount, 2), business=bool(data.business))
+        discount, promo_code = res["discount"], res["promo"]["code"]
+        await db.promos.update_one({"code": promo_code}, {"$inc": {"uses": 1}})
     return {
         "id": new_id(),
         "source": "platform",
@@ -51,7 +60,11 @@ async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = N
         "surcharge_enabled": bool(sur),
         "surcharge_km": sur["distance_to_center_km"] if sur else 0,
         "surcharge_amount": sur_amount,
-        "price": round(base + sur_amount, 2),
+        "price": round(max(base + sur_amount - discount, 0), 2),
+        "promo_code": promo_code,
+        "discount_amount": discount,
+        "price_multiplier": city["price_multiplier"],
+        "city_name": city.get("city_name"),
         "distance_km": dist,
         "duration_min": duration,
         "status": "requested",
