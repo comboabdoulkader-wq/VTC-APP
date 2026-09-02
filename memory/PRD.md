@@ -62,3 +62,8 @@ Expo Router, RN 0.81, @gorhom/bottom-sheet, react-native-maps (web fallback), ex
 
 ## Test Credentials
 See /app/memory/test_credentials.md
+
+## Iteration 7 additions
+- Document history: previous versions are archived (never deleted) — `GET /documents/history`, admin detail `history[]` with file links; UI "Historique des documents" (driver) + admin section
+- Reminders J-30 / J-7 / J-1 (`WARN_STEPS`, `warned_days` on document) + expiry/blocked/unblocked alerts sent to the team manager (`alert_supervisors`, notification type `team_document`)
+- Driver profile photo: upload type `profile_photo` → `users.photo_path`; `GET /users/{id}/photo?token=` (any authenticated user); shown to passenger in ride detail (`driver_has_photo`), driver profile avatar with camera button

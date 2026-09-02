@@ -22,6 +22,7 @@ export type User = {
   is_active?: boolean;
   is_moderator?: boolean;
   docs_blocked?: boolean;
+  has_photo?: boolean;
   selfie_requested?: boolean;
   company_name?: string | null;
   invite_code?: string | null;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert, Image } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
@@ -131,7 +131,11 @@ export default function RideDetail() {
 
           {ride.driver_name ? (
             <View style={styles.driverCard}>
-              <View style={styles.avatar}><Text style={styles.avatarText}>{ride.driver_name[0]}</Text></View>
+              {ride.driver_has_photo ? (
+                <Image testID="driver-photo" source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/users/${ride.driver_id}/photo?token=${token}` }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatar}><Text style={styles.avatarText}>{ride.driver_name[0]}</Text></View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.driverName}>{ride.driver_name}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>

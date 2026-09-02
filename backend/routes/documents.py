@@ -16,6 +16,7 @@ log = logging.getLogger("documents")
 
 BLOCK_MESSAGE = "Votre compte est temporairement bloqué car un ou plusieurs documents obligatoires ont expiré. Merci de les mettre à jour pour réactiver votre compte."
 WARN_DAYS = 30
+WARN_STEPS = [30, 7, 1]  # reminders J-30, J-7, J-1
 MAX_SIZE = 10 * 1024 * 1024
 ALLOWED = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf"}
 
@@ -67,10 +68,21 @@ def doc_state(dt: dict, doc: Optional[dict], today: datetime) -> str:
     return "valid"
 
 
+async def alert_supervisors(driver: dict, title: str, body: str, admins: bool = True):
+    """Notify the team manager (if any) and, optionally, platform admins."""
+    if driver.get("manager_id"):
+        await notify(driver["manager_id"], "team_document", title, body)
+    if admins:
+        for admin in MODERATOR_EMAILS:
+            a = await db.users.find_one({"email": admin}, {"_id": 0, "id": 1})
+            if a and a["id"] != driver.get("manager_id"):
+                await notify(a["id"], "document", title, body)
+
+
 async def evaluate_driver(driver: dict, send_alerts: bool = False) -> dict:
     """Compute compliance, persist blocked flag, optionally send J-30 / expiry notifications."""
     today = now_utc()
-    docs = {d["type"]: d async for d in db.documents.find({"driver_id": driver["id"], "type": {"$ne": "selfie"}}, {"_id": 0})}
+    docs = {d["type"]: d async for d in db.documents.find({"driver_id": driver["id"], "type": {"$ne": "selfie"}, "archived": {"$ne": True}}, {"_id": 0})}
     items, blocking, expiring = [], [], []
     for dt in DOC_TYPES:
         doc = docs.get(dt["key"])
@@ -81,26 +93,34 @@ async def evaluate_driver(driver: dict, send_alerts: bool = False) -> dict:
         if state == "expiring":
             expiring.append({"label": dt["label"], "valid_until": doc["valid_until"]})
         if doc and send_alerts:
-            if state == "expiring" and not doc.get("warned_30"):
-                await db.documents.update_one({"id": doc["id"]}, {"$set": {"warned_30": True}})
-                when = doc["valid_until"].strftime("%d/%m/%Y")
-                await notify(driver["id"], "document", f"{dt['label']} expire bientôt", f"Expiration le {when} (dans moins de {WARN_DAYS} jours). Pensez à le renouveler.")
-                for admin in MODERATOR_EMAILS:
-                    a = await db.users.find_one({"email": admin}, {"_id": 0, "id": 1})
-                    if a:
-                        await notify(a["id"], "document", f"Document bientôt expiré – {driver['full_name']}", f"{dt['label']} expire le {when}")
+            if state == "expiring":
+                until = doc["valid_until"] if doc["valid_until"].tzinfo else doc["valid_until"].replace(tzinfo=timezone.utc)
+                days_left = max((until - today).days, 0)
+                warned = set(doc.get("warned_days") or ([30] if doc.get("warned_30") else []))
+                due = [t for t in WARN_STEPS if days_left <= t and t not in warned]
+                if due:
+                    step = min(due)
+                    await db.documents.update_one({"id": doc["id"]}, {"$set": {"warned_days": sorted(warned | set(due))}})
+                    when = until.strftime("%d/%m/%Y")
+                    urgency = "demain" if step == 1 else f"dans {days_left} jour(s)"
+                    await notify(driver["id"], "document", f"{dt['label']} expire {urgency}", f"Expiration le {when}. Renouvelez-le pour éviter le blocage de votre compte.")
+                    await alert_supervisors(driver, f"Document bientôt expiré – {driver['full_name']}", f"{dt['label']} expire le {when} ({urgency})")
             if state == "expired" and doc.get("status") != "expired":
                 await db.documents.update_one({"id": doc["id"]}, {"$set": {"status": "expired"}})
                 await notify(driver["id"], "document", f"{dt['label']} expiré", "Merci de téléverser une nouvelle version pour réactiver votre compte.")
+                await alert_supervisors(driver, f"Document expiré – {driver['full_name']}", f"{dt['label']} a expiré. Le chauffeur est bloqué jusqu'au renouvellement.")
         items.append({**dt, "state": state, "required": required, "doc": doc and {k: v for k, v in doc.items() if k not in ("storage_path",)}})
     blocked = len(blocking) > 0
     if bool(driver.get("docs_blocked")) != blocked:
         await db.users.update_one({"id": driver["id"]}, {"$set": {"docs_blocked": blocked, "is_online": driver.get("is_online") and not blocked}})
         if blocked and send_alerts:
             await notify(driver["id"], "blocked", "Compte bloqué", BLOCK_MESSAGE)
+            await alert_supervisors(driver, f"Chauffeur bloqué – {driver['full_name']}", f"Documents manquants/expirés : {', '.join(blocking)}", admins=False)
+        if not blocked and driver.get("docs_blocked") and driver.get("manager_id"):
+            await notify(driver["manager_id"], "unblocked", f"Chauffeur réactivé – {driver['full_name']}", "Ses documents sont à jour, il peut reprendre les courses.")
         if not blocked and driver.get("docs_blocked"):
             await notify(driver["id"], "unblocked", "Compte réactivé", "Vos documents sont à jour. Vous pouvez reprendre les courses.")
-    selfie = await db.documents.find_one({"driver_id": driver["id"], "type": "selfie"}, {"_id": 0, "storage_path": 0}, sort=[("uploaded_at", -1)])
+    selfie = await db.documents.find_one({"driver_id": driver["id"], "type": "selfie", "archived": {"$ne": True}}, {"_id": 0, "storage_path": 0}, sort=[("uploaded_at", -1)])
     return {"blocked": blocked, "block_message": BLOCK_MESSAGE if blocked else None, "blocking": blocking, "expiring": expiring,
             "items": items, "selfie_requested": bool(driver.get("selfie_requested")), "selfie": selfie}
 
@@ -112,6 +132,28 @@ async def compliance_sweep():
             await evaluate_driver(drv, send_alerts=True)
         except Exception as e:
             log.warning("sweep failed for %s: %s", drv.get("email"), e)
+
+
+async def archive_current(driver_id: str, type_: str):
+    """Keep previous versions for audit: never delete, archive."""
+    await db.documents.update_many({"driver_id": driver_id, "type": type_, "archived": {"$ne": True}},
+                                   {"$set": {"archived": True, "archived_at": now_utc()}})
+
+
+async def history_for(driver_id: str, with_paths: bool = False) -> list:
+    proj = {"_id": 0} if with_paths else {"_id": 0, "storage_path": 0}
+    out = []
+    async for d in db.documents.find({"driver_id": driver_id, "archived": True}, proj).sort("archived_at", -1).limit(100):
+        if d["type"] == "selfie":
+            d["label"] = "Selfie de vérification"
+        elif d["type"] == "profile_photo":
+            d["label"] = "Photo de profil"
+        else:
+            d["label"] = TYPE_MAP.get(d["type"], {}).get("label", d["type"])
+        if with_paths and d.get("storage_path"):
+            d["file_path"] = d.pop("storage_path")
+        out.append(d)
+    return out
 
 
 def admin_only(user=Depends(current_user)):
@@ -131,9 +173,14 @@ async def my_documents(user=Depends(require_role("driver"))):
     return await evaluate_driver(user)
 
 
+@router.get("/documents/history")
+async def my_history(user=Depends(require_role("driver"))):
+    return await history_for(user["id"])
+
+
 @router.post("/documents/upload")
 async def upload(file: UploadFile = File(...), type: str = Form(...), valid_from: Optional[str] = Form(None), valid_until: Optional[str] = Form(None), user=Depends(require_role("driver"))):
-    if type != "selfie" and type not in TYPE_MAP:
+    if type not in ("selfie", "profile_photo") and type not in TYPE_MAP:
         raise HTTPException(422, "Type de document inconnu")
     ct = (file.content_type or "").split(";")[0]
     if ct not in ALLOWED:
@@ -147,7 +194,7 @@ async def upload(file: UploadFile = File(...), type: str = Form(...), valid_from
         d = datetime.fromisoformat(s.replace("Z", "+00:00"))
         return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
     vf, vu = parse(valid_from), parse(valid_until)
-    if type != "selfie" and TYPE_MAP[type]["expires"] and not vu:
+    if type in TYPE_MAP and TYPE_MAP[type]["expires"] and not vu:
         raise HTTPException(422, "Date d'expiration requise")
     uid = new_id()
     path = object_path(user["id"], ALLOWED[ct], uid)
@@ -157,10 +204,14 @@ async def upload(file: UploadFile = File(...), type: str = Form(...), valid_from
         code = e.response.status_code if e.response is not None else 500
         raise HTTPException(402 if code == 402 else 502, "Stockage indisponible, réessayez plus tard" if code != 402 else "Quota de stockage épuisé")
     doc = {"id": uid, "driver_id": user["id"], "driver_name": user["full_name"], "type": type, "storage_path": path, "content_type": ct,
-           "filename": file.filename, "valid_from": vf, "valid_until": vu, "status": "pending" if type == "selfie" else "valid",
+           "filename": file.filename, "valid_from": vf, "valid_until": vu, "status": "pending" if type == "selfie" else "valid", "archived": False,
            "uploaded_at": now_utc(), "warned_30": False, "not_applicable": False}
-    await db.documents.delete_many({"driver_id": user["id"], "type": type})
+    await archive_current(user["id"], type)
     await db.documents.insert_one(doc.copy())
+    if type == "profile_photo":
+        if not ct.startswith("image/"):
+            raise HTTPException(415, "La photo de profil doit être une image")
+        await db.users.update_one({"id": user["id"]}, {"$set": {"photo_path": path}})
     if type == "selfie":
         await db.users.update_one({"id": user["id"]}, {"$set": {"selfie_requested": False}})
         user["selfie_requested"] = False
@@ -176,7 +227,7 @@ async def not_applicable(type: str, user=Depends(require_role("driver"))):
     dt = TYPE_MAP.get(type)
     if not dt or dt["required"] != "if_applicable":
         raise HTTPException(409, "Ce document est obligatoire")
-    await db.documents.delete_many({"driver_id": user["id"], "type": type})
+    await archive_current(user["id"], type)
     await db.documents.insert_one({"id": new_id(), "driver_id": user["id"], "driver_name": user["full_name"], "type": type, "not_applicable": True, "status": "valid", "uploaded_at": now_utc()})
     return await evaluate_driver(user)
 
@@ -218,7 +269,8 @@ async def admin_driver_docs(driver_id: str, user=Depends(admin_only)):
             it["doc"]["file_path"] = paths.get(it["doc"]["id"])
     if c["selfie"]:
         c["selfie"]["file_path"] = paths.get(c["selfie"]["id"])
-    return {"driver": {"id": drv["id"], "full_name": drv["full_name"], "email": drv["email"], "phone": drv.get("phone"), "vehicle_model": drv.get("vehicle_model"), "license_plate": drv.get("license_plate"), "manager_name": drv.get("manager_name")}, **c}
+    return {"driver": {"id": drv["id"], "full_name": drv["full_name"], "email": drv["email"], "phone": drv.get("phone"), "vehicle_model": drv.get("vehicle_model"), "license_plate": drv.get("license_plate"), "manager_name": drv.get("manager_name")},
+            "history": await history_for(driver_id, with_paths=True), **c}
 
 
 @router.patch("/admin/documents/{doc_id}")
@@ -247,3 +299,16 @@ async def request_selfie(driver_id: str, user=Depends(admin_only)):
         raise HTTPException(404, "Chauffeur introuvable")
     await notify(driver_id, "selfie", "Vérification d'identité demandée", "Le gérant de l'application vous demande un selfie de vérification. Ouvrez l'onglet Documents.")
     return {"ok": True}
+
+
+@router.get("/users/{user_id}/photo")
+async def user_photo(user_id: str, user=Depends(current_user)):
+    """Driver profile photo, visible to any authenticated user (passengers see it during a ride)."""
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "photo_path": 1})
+    if not u or not u.get("photo_path"):
+        raise HTTPException(404, "Pas de photo")
+    try:
+        content, ct = await get_object(u["photo_path"])
+    except Exception:
+        raise HTTPException(502, "Photo indisponible")
+    return Response(content, media_type=ct, headers={"Cache-Control": "private, max-age=600"})

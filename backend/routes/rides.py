@@ -149,6 +149,7 @@ def driver_fields(user: dict) -> dict:
         "driver_vehicle": user.get("vehicle_model") or "Véhicule",
         "driver_plate": user.get("license_plate") or "N/A",
         "driver_rating": user.get("rating", 5.0),
+        "driver_has_photo": bool(user.get("photo_path")),
         "manager_id": user.get("manager_id"),
     }
 

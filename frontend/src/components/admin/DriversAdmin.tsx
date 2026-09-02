@@ -97,6 +97,17 @@ export default function DriversAdmin({ visible, onClose }: { visible: boolean; o
             {detail.items.filter((i: any) => i.category === "driver").map((i: any) => <DocCard key={i.key} label={i.label} doc={i.doc} state={i.state} />)}
             <Text style={styles.section}>Véhicule</Text>
             {detail.items.filter((i: any) => i.category === "vehicle").map((i: any) => <DocCard key={i.key} label={i.label} doc={i.doc} state={i.state} />)}
+            <Text style={styles.section}>Historique ({detail.history?.length || 0})</Text>
+            {(detail.history || []).length === 0 ? <Text style={styles.meta}>Aucune version archivée</Text> : detail.history.map((h: any) => (
+              <Pressable key={h.id} testID={`admin-history-${h.id}`} onPress={() => h.file_path && openFile(h.file_path)} style={styles.row}>
+                <Icon name="file-clock-outline" size={18} color={theme.color.onSurfaceTertiary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{h.label}</Text>
+                  <Text style={styles.meta}>{h.valid_until ? `Jusqu'au ${new Date(h.valid_until).toLocaleDateString("fr-FR")} · ` : ""}déposé {new Date(h.uploaded_at).toLocaleDateString("fr-FR")} · archivé {new Date(h.archived_at).toLocaleDateString("fr-FR")}{h.status === "rejected" ? " · refusé" : ""}</Text>
+                </View>
+                {h.file_path && <Icon name="open-in-new" size={18} color={theme.color.onSurfaceTertiary} />}
+              </Pressable>
+            ))}
           </>
         )}
       </SheetModal>

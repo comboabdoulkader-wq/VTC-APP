@@ -109,7 +109,7 @@ async def assign_ride(data: AssignIn, user=Depends(driver_only)):
         "status": "accepted", "accepted_at": now_utc(),
         "driver_id": m["id"], "driver_name": m["full_name"],
         "driver_vehicle": m.get("vehicle_model") or "Véhicule", "driver_plate": m.get("license_plate") or "N/A",
-        "driver_rating": m.get("rating", 5.0), "manager_id": user["id"],
+        "driver_rating": m.get("rating", 5.0), "driver_has_photo": bool(m.get("photo_path")), "manager_id": user["id"],
         "assigned_by": user["id"], "assigned_by_name": user["full_name"],
     }
     await db.rides.update_one({"id": r["id"]}, {"$set": update})

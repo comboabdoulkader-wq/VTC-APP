@@ -46,6 +46,7 @@ class UserOut(BaseModel):
     is_moderator: bool = False
     docs_blocked: bool = False
     selfie_requested: bool = False
+    has_photo: bool = False
     company_name: Optional[str] = None
     invite_code: Optional[str] = None
     company_id: Optional[str] = None
@@ -129,6 +130,7 @@ class RideOut(BaseModel):
     driver_vehicle: Optional[str] = None
     driver_plate: Optional[str] = None
     driver_rating: Optional[float] = None
+    driver_has_photo: bool = False
     driver_location: Optional[DriverLocation] = None
     driver_eta_min: Optional[int] = None
     pickup: LocationIn

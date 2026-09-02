@@ -40,9 +40,14 @@ export default function Documents() {
   const [until, setUntil] = useState("");
   const [asset, setAsset] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(async () => {
-    try { setData(await apiFetch<Compliance>("/documents/mine", {}, token)); } catch {} finally { setRefreshing(false); }
+    try {
+      const [c, h] = await Promise.all([apiFetch<Compliance>("/documents/mine", {}, token), apiFetch<any[]>("/documents/history", {}, token)]);
+      setData(c); setHistory(h);
+    } catch {} finally { setRefreshing(false); }
   }, [token]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -134,6 +139,26 @@ export default function Documents() {
           )}
           {section("driver", "Documents du chauffeur")}
           {section("vehicle", "Documents du véhicule")}
+
+          <Pressable testID="toggle-history" onPress={() => setShowHistory((v) => !v)} style={[styles.card, { marginTop: theme.spacing.lg }]}>
+            <Icon name="history" size={24} color={theme.color.onSurface} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.docLabel}>Historique des documents</Text>
+              <Text style={styles.docState}>{history.length} version{history.length > 1 ? "s" : ""} archivée{history.length > 1 ? "s" : ""} · preuve de conformité passée</Text>
+            </View>
+            <Icon name={showHistory ? "chevron-up" : "chevron-down"} size={22} color={theme.color.onSurfaceTertiary} />
+          </Pressable>
+          {showHistory && (history.length === 0 ? <Text style={styles.hint}>Aucune ancienne version pour le moment.</Text> : history.map((h) => (
+            <View key={h.id} style={styles.histRow} testID={`history-${h.id}`}>
+              <Icon name="file-clock-outline" size={18} color={theme.color.onSurfaceTertiary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.histLabel}>{h.label}{h.not_applicable ? " · non concerné" : ""}</Text>
+                <Text style={styles.histMeta}>
+                  {h.valid_until ? `Valide jusqu'au ${fmt(h.valid_until)} · ` : ""}déposé le {fmt(h.uploaded_at)} · archivé le {fmt(h.archived_at)}{h.status === "rejected" ? " · refusé" : ""}
+                </Text>
+              </View>
+            </View>
+          )))}
         </ScrollView>
       )}
 
@@ -180,6 +205,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: "700", color: theme.color.onSurfaceSecondary, marginBottom: 6 },
   input: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 50, fontSize: 16, color: theme.color.onSurface, marginBottom: theme.spacing.md },
   hint: { fontSize: 12, color: theme.color.onSurfaceTertiary },
+  histRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.sm, borderBottomWidth: 1, borderBottomColor: theme.color.divider },
+  histLabel: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
+  histMeta: { fontSize: 11, color: theme.color.onSurfaceTertiary, marginTop: 2 },
   primary: { backgroundColor: theme.color.brand, height: 54, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center" },
   primaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
 });

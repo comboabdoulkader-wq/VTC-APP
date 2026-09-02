@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/material-design-icons";
@@ -8,17 +8,33 @@ import { theme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
-import { getNavApp, setNavApp, NavApp } from "@/src/utils/files";
+import { getNavApp, setNavApp, NavApp, pickImage, uploadDocument } from "@/src/utils/files";
 
 export default function DriverProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, token, refresh } = useAuth();
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [nav, setNav] = useState<NavApp | null>(null);
   useEffect(() => { getNavApp().then(setNav); }, []);
   const chooseNav = (a: NavApp) => { setNav(a); setNavApp(a); };
+  const changePhoto = () => {
+    const doPick = async (src: "camera" | "library") => {
+      const a = await pickImage(src);
+      if (!a) return;
+      setPhotoBusy(true);
+      try { await uploadDocument(token, a, { type: "profile_photo" }); await refresh(); setPhotoVersion((v) => v + 1); }
+      catch (e: any) { Alert.alert("Erreur", e.message); } finally { setPhotoBusy(false); }
+    };
+    Alert.alert("Photo de profil", "Visible par vos passagers pendant la course", [
+      { text: "Prendre une photo", onPress: () => doPick("camera") },
+      { text: "Choisir dans la galerie", onPress: () => doPick("library") },
+      { text: "Annuler", style: "cancel" },
+    ]);
+  };
 
   const doLogout = async () => {
     await logout();
@@ -36,9 +52,17 @@ export default function DriverProfile() {
       <Text style={styles.title}>Profil chauffeur</Text>
 
       <View style={styles.card}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.full_name.substring(0, 1).toUpperCase()}</Text>
-        </View>
+        <Pressable testID="change-photo" onPress={changePhoto} style={styles.avatar}>
+          {photoBusy ? <ActivityIndicator color="#fff" /> : user.has_photo ? (
+            <Image source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/users/${user.id}/photo?token=${token}&v=${photoVersion}` }} style={{ width: 72, height: 72, borderRadius: 36 }} />
+          ) : (
+            <Text style={styles.avatarText}>{user.full_name.substring(0, 1).toUpperCase()}</Text>
+          )}
+          <View style={{ position: "absolute", right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13, backgroundColor: theme.color.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.color.border }}>
+            <Icon name="camera" size={14} color={theme.color.onSurface} />
+          </View>
+        </Pressable>
+        <Text style={{ fontSize: 12, color: theme.color.onSurfaceTertiary, marginBottom: 6 }}>{user.has_photo ? "Photo visible par vos passagers" : "Ajoutez une photo pour rassurer vos passagers"}</Text>
         <Text style={styles.name}>{user.full_name}</Text>
         <Text style={styles.email}>{user.email}</Text>
 
