@@ -1,16 +1,21 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, Pressable } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import { apiFetch, useAuth } from "@/src/context/auth";
+import { fmtDateTime } from "@/src/utils/format";
 
 type Ride = {
   id: string; pickup: any; dropoff: any; price: number; status: string;
   created_at: string; vehicle_type: string; rating?: number; driver_name?: string;
+  scheduled_at?: string | null; passenger_label?: string | null; surcharge_enabled?: boolean;
+  payment_method?: string; payment_status?: string; driver_eta_min?: number | null;
 };
+
+const ACTIVE = ["requested", "accepted", "in_progress"];
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   requested: { label: "En attente", color: theme.color.warning },
@@ -36,12 +41,20 @@ export default function Rides() {
     finally { setLoading(false); setRefreshing(false); }
   }, [token]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    load();
+    const t = setInterval(load, 6000);
+    return () => clearInterval(t);
+  }, [load]));
+
+  const sorted = [...rides].sort((a, b) => Number(ACTIVE.includes(b.status)) - Number(ACTIVE.includes(a.status)));
+  const activeCount = rides.filter((r) => ACTIVE.includes(r.status)).length;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]} testID="rides-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Mes courses</Text>
+        {activeCount > 0 && <Text style={styles.subtitle}>{activeCount} en cours · suivi en temps réel</Text>}
       </View>
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={theme.color.onSurface} />
@@ -52,24 +65,34 @@ export default function Rides() {
         </View>
       ) : (
         <FlatList
-          data={rides}
+          data={sorted}
           keyExtractor={(r) => r.id}
           contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.md }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.color.onSurface} />}
           renderItem={({ item }) => {
             const status = STATUS_LABELS[item.status] || STATUS_LABELS.completed;
+            const isActive = ACTIVE.includes(item.status);
             return (
-              <View
+              <Pressable
                 testID={`ride-card-${item.id}`}
-                style={styles.card}
-                onTouchEnd={() => router.push(`/(passenger)/ride/${item.id}`)}
+                style={[styles.card, isActive && styles.cardActive]}
+                onPress={() => router.push(`/(passenger)/ride/${item.id}`)}
               >
                 <View style={styles.cardHeader}>
-                  <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</Text>
+                  <Text style={styles.date}>
+                    {item.scheduled_at ? `📅 ${fmtDateTime(item.scheduled_at)}` : new Date(item.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </Text>
                   <View style={[styles.badge, { backgroundColor: status.color + "22" }]}>
                     <Text style={[styles.badgeText, { color: status.color }]}>{status.label}</Text>
                   </View>
                 </View>
+                {(item.passenger_label || item.surcharge_enabled) && (
+                  <View style={styles.tags}>
+                    {item.passenger_label ? <Text style={styles.tag}>👤 {item.passenger_label}</Text> : null}
+                    {item.surcharge_enabled ? <Text style={styles.tag}>⚡ Rallonge</Text> : null}
+                    {item.payment_method === "card" ? <Text style={styles.tag}>💳 {item.payment_status === "paid" ? "Payé" : "Carte"}</Text> : null}
+                  </View>
+                )}
                 <View style={styles.route}>
                   <Icon name="circle" size={10} color={theme.color.success} />
                   <Text style={styles.routeText} numberOfLines={1}>{item.pickup.address}</Text>
@@ -79,10 +102,10 @@ export default function Rides() {
                   <Text style={styles.routeText} numberOfLines={1}>{item.dropoff.address}</Text>
                 </View>
                 <View style={styles.cardFooter}>
-                  <Text style={styles.driver}>{item.driver_name || "En recherche"}</Text>
+                  <Text style={styles.driver}>{item.driver_name ? `${item.driver_name}${item.driver_eta_min != null && isActive ? ` · ${item.driver_eta_min} min` : ""}` : "En recherche"}</Text>
                   <Text style={styles.price}>{item.price.toFixed(2)} €</Text>
                 </View>
-              </View>
+              </Pressable>
             );
           }}
         />
@@ -95,9 +118,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surface },
   header: { paddingHorizontal: theme.spacing.xl, paddingVertical: theme.spacing.lg },
   title: { fontSize: 32, fontWeight: "800", color: theme.color.onSurface, letterSpacing: -1 },
+  subtitle: { fontSize: 13, color: theme.color.success, fontWeight: "700", marginTop: 4 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: theme.spacing.md },
   emptyText: { fontSize: 16, color: theme.color.onSurfaceTertiary, fontWeight: "600" },
-  card: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.lg },
+  card: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.lg, borderWidth: 2, borderColor: "transparent" },
+  cardActive: { borderColor: theme.color.success, backgroundColor: "#F6FBF8" },
+  tags: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.sm, flexWrap: "wrap" },
+  tag: { fontSize: 12, fontWeight: "600", color: theme.color.onSurfaceSecondary, backgroundColor: theme.color.surface, paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radius.pill },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.md },
   date: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   badge: { paddingHorizontal: theme.spacing.sm, paddingVertical: 4, borderRadius: theme.radius.pill },

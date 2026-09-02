@@ -17,6 +17,9 @@ export type User = {
   license_plate?: string;
   rating: number;
   total_rides: number;
+  manager_id?: string | null;
+  manager_name?: string | null;
+  is_active?: boolean;
 };
 
 type AuthCtx = {

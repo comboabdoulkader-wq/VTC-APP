@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { apiFetch, useAuth } from "@/src/context/auth";
+import { money, fmtDateTime } from "@/src/utils/format";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type Ride = any;
 
@@ -27,84 +32,102 @@ export default function RideDetail() {
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(5);
   const [submittingRate, setSubmittingRate] = useState(false);
-  const [showRating, setShowRating] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const r = await apiFetch<Ride>(`/rides/${id}`, {}, token);
       setRide(r);
-      if (r.status === "completed" && !r.rating) setShowRating(true);
-    } catch {}
-    finally { setLoading(false); }
+    } catch {} finally { setLoading(false); }
   }, [id, token]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Poll every 4s
   useEffect(() => {
-    if (!ride) return;
-    if (["completed", "cancelled"].includes(ride.status)) return;
+    if (!ride || ["completed", "cancelled"].includes(ride.status)) return;
     const t = setInterval(load, 4000);
     return () => clearInterval(t);
-  }, [ride, load]);
+  }, [ride?.status, load]);
 
   const cancel = async () => {
-    try {
-      await apiFetch(`/rides/${id}/cancel`, { method: "POST" }, token);
-      router.replace("/(passenger)");
-    } catch {}
+    try { await apiFetch(`/rides/${id}/cancel`, { method: "POST" }, token); router.replace("/(passenger)/rides"); } catch {}
   };
 
   const submitRating = async () => {
     setSubmittingRate(true);
     try {
-      await apiFetch(`/rides/${id}/rate`, {
-        method: "POST",
-        body: JSON.stringify({ rating, tip: 0 }),
-      }, token);
+      await apiFetch(`/rides/${id}/rate`, { method: "POST", body: JSON.stringify({ rating, tip: 0 }) }, token);
       router.replace("/(passenger)/rides");
     } catch {} finally { setSubmittingRate(false); }
   };
 
+  const payByCard = async () => {
+    setPaying(true);
+    try {
+      const returnUrl = Linking.createURL("payment-result");
+      const { checkout_url } = await apiFetch<{ checkout_url: string }>(`/payments/checkout/${id}`, {
+        method: "POST", body: JSON.stringify({ return_url: returnUrl }),
+      }, token);
+      await WebBrowser.openAuthSessionAsync(checkout_url, returnUrl);
+      const st = await apiFetch<{ status: string }>(`/payments/status/${id}`, {}, token);
+      if (st.status === "paid") Alert.alert("Paiement confirmé", "Votre course est réglée par carte.");
+      load();
+    } catch (e: any) { Alert.alert("Paiement", e.message || "Impossible d'ouvrir le paiement"); } finally { setPaying(false); }
+  };
+
   if (loading || !ride) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={theme.color.onSurface} />
-      </View>
-    );
+    return <View style={styles.center}><ActivityIndicator color={theme.color.onSurface} /></View>;
   }
 
   const markers: MapMarker[] = [
     { id: "p", type: "pickup", coordinate: { latitude: ride.pickup.lat, longitude: ride.pickup.lng } },
     { id: "d", type: "dropoff", coordinate: { latitude: ride.dropoff.lat, longitude: ride.dropoff.lng } },
   ];
-
+  if (ride.driver_location && ["accepted", "in_progress"].includes(ride.status)) {
+    markers.push({ id: "drv", type: "driver", coordinate: { latitude: ride.driver_location.lat, longitude: ride.driver_location.lng } });
+  }
   const canCancel = ["requested", "accepted"].includes(ride.status);
+  const arriving = ride.status === "accepted" && ride.driver_eta_min != null && ride.driver_eta_min <= 2;
+  const showPay = ride.payment_method === "card" && ride.payment_status !== "paid" && ride.status !== "cancelled";
 
   return (
     <View style={styles.root} testID="ride-detail">
       <MapCanvas
         region={{ latitude: (ride.pickup.lat + ride.dropoff.lat) / 2, longitude: (ride.pickup.lng + ride.dropoff.lng) / 2, latitudeDelta: 0.15, longitudeDelta: 0.15 }}
         markers={markers}
-        polyline={[
-          { latitude: ride.pickup.lat, longitude: ride.pickup.lng },
-          { latitude: ride.dropoff.lat, longitude: ride.dropoff.lng },
-        ]}
+        polyline={[{ latitude: ride.pickup.lat, longitude: ride.pickup.lng }, { latitude: ride.dropoff.lat, longitude: ride.dropoff.lng }]}
       />
 
-      <Pressable
-        testID="ride-back-button"
-        onPress={() => router.replace("/(passenger)")}
-        style={[styles.back, { top: insets.top + theme.spacing.md }]}
-        hitSlop={12}
-      >
+      <Pressable testID="ride-back-button" onPress={() => router.replace("/(passenger)/rides")} style={[styles.back, { top: insets.top + theme.spacing.md }]} hitSlop={12}>
         <Icon name="chevron-left" size={26} color={theme.color.onSurface} />
       </Pressable>
 
       <View style={[styles.sheet, { paddingBottom: insets.bottom + theme.spacing.lg }]}>
         <View style={styles.handle} />
         <ScrollView showsVerticalScrollIndicator={false}>
-          <Text style={styles.status}>{STATUS[ride.status] || ride.status}</Text>
+          <View style={styles.statusRow}>
+            <Text style={styles.status}>{STATUS[ride.status] || ride.status}</Text>
+            {ride.driver_eta_min != null && ["accepted", "in_progress"].includes(ride.status) && (
+              <View style={[styles.etaPill, arriving && { backgroundColor: theme.color.success }]} testID="driver-eta">
+                <Icon name="clock-fast" size={14} color={arriving ? "#fff" : theme.color.onSurface} />
+                <Text style={[styles.etaText, arriving && { color: "#fff" }]}>{ride.driver_eta_min <= 1 ? "Arrive" : `${ride.driver_eta_min} min`}</Text>
+              </View>
+            )}
+          </View>
+
+          {arriving && (
+            <View style={styles.arrivingBox} testID="arriving-box">
+              <Icon name="bell-ring" size={18} color={theme.color.success} />
+              <Text style={styles.arrivingText}>Votre chauffeur arrive dans moins de 2 minutes. Soyez prêt !</Text>
+            </View>
+          )}
+
+          {ride.scheduled_at && (
+            <View style={styles.infoRow}><Icon name="calendar-clock" size={16} color={theme.color.onSurfaceSecondary} /><Text style={styles.infoText}>Programmée : {fmtDateTime(ride.scheduled_at)}</Text></View>
+          )}
+          {ride.passenger_label && (
+            <View style={styles.infoRow}><Icon name="account-outline" size={16} color={theme.color.onSurfaceSecondary} /><Text style={styles.infoText}>Passager : {ride.passenger_label}</Text></View>
+          )}
 
           {ride.driver_name ? (
             <View style={styles.driverCard}>
@@ -114,6 +137,7 @@ export default function RideDetail() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Icon name="star" size={14} color={theme.color.star} />
                   <Text style={styles.driverRating}>{(ride.driver_rating || 5).toFixed(1)}</Text>
+                  {ride.driver_location && <Text style={styles.live}>● GPS live</Text>}
                 </View>
               </View>
               <View style={styles.plate}>
@@ -121,31 +145,52 @@ export default function RideDetail() {
                 <Text style={styles.plateNum}>{ride.driver_plate}</Text>
               </View>
             </View>
-          ) : (
+          ) : ride.status === "requested" ? (
             <View style={styles.waitingCard}>
               <ActivityIndicator color={theme.color.onSurface} />
-              <Text style={styles.waitingText}>Nous recherchons un chauffeur près de vous…</Text>
+              <Text style={styles.waitingText}>
+                {ride.scheduled_at ? "Un chauffeur confirmera votre réservation à l'avance." : "Nous recherchons un chauffeur près de vous…"}
+                {ride.surcharge_enabled ? " Rallonge activée : votre course est prioritaire." : ""}
+              </Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.routeBox}>
-            <View style={styles.routeRow}>
-              <View style={[styles.dot, { backgroundColor: theme.color.success }]} />
-              <Text style={styles.routeText} numberOfLines={1}>{ride.pickup.address}</Text>
-            </View>
+            <View style={styles.routeRow}><View style={[styles.dot, { backgroundColor: theme.color.success }]} /><Text style={styles.routeText} numberOfLines={1}>{ride.pickup.address}</Text></View>
             <View style={styles.line} />
-            <View style={styles.routeRow}>
-              <Icon name="map-marker" size={14} color={theme.color.error} />
-              <Text style={styles.routeText} numberOfLines={1}>{ride.dropoff.address}</Text>
+            <View style={styles.routeRow}><Icon name="map-marker" size={14} color={theme.color.error} /><Text style={styles.routeText} numberOfLines={1}>{ride.dropoff.address}</Text></View>
+            {ride.notes ? <Text style={styles.notes}>📝 {ride.notes}</Text> : null}
+          </View>
+
+          <View style={styles.priceBox} testID="ride-price-box">
+            <View style={styles.priceRow}><Text style={styles.priceLabel}>Course ({ride.distance_km.toFixed(1)} km)</Text><Text style={styles.priceSmall}>{money(ride.base_price)}</Text></View>
+            {ride.surcharge_enabled && (
+              <View style={styles.priceRow}><Text style={styles.priceLabel}>Rallonge ({ride.surcharge_km} km × 1,20 €)</Text><Text style={styles.priceSmall}>+{money(ride.surcharge_amount)}</Text></View>
+            )}
+            <View style={[styles.priceRow, { marginTop: 4 }]}>
+              <Text style={styles.priceTotalLabel}>Total</Text>
+              <Text style={styles.priceValue}>{money(ride.price)}</Text>
+            </View>
+            <View style={styles.payRow}>
+              <Icon name={ride.payment_method === "card" ? "credit-card-outline" : "cash"} size={16} color={theme.color.onSurfaceSecondary} />
+              <Text style={styles.payText}>
+                {ride.payment_method === "card" ? "Carte" : "Espèces"} · {ride.payment_status === "paid" ? "Payé ✓" : ride.payment_status === "pending" ? "En attente" : "À régler"}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.priceBox}>
-            <Text style={styles.priceLabel}>Prix estimé</Text>
-            <Text style={styles.priceValue}>{ride.price.toFixed(2)} €</Text>
-          </View>
+          {showPay && (
+            <Pressable testID="pay-card-button" onPress={payByCard} disabled={paying} style={[styles.primary, paying && { opacity: 0.7 }]}>
+              {paying ? <ActivityIndicator color="#fff" /> : (
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  <Icon name="lock" size={16} color="#fff" />
+                  <Text style={styles.primaryText}>Payer par carte • {money(ride.price)}</Text>
+                </View>
+              )}
+            </Pressable>
+          )}
 
-          {showRating && ride.status === "completed" && !ride.rating && (
+          {ride.status === "completed" && !ride.rating && (
             <View style={styles.rateBox} testID="rating-box">
               <Text style={styles.rateTitle}>Notez votre chauffeur</Text>
               <View style={styles.stars}>
@@ -155,12 +200,7 @@ export default function RideDetail() {
                   </Pressable>
                 ))}
               </View>
-              <Pressable
-                testID="submit-rating"
-                onPress={submitRating}
-                disabled={submittingRate}
-                style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }, submittingRate && { opacity: 0.7 }]}
-              >
+              <Pressable testID="submit-rating" onPress={submitRating} disabled={submittingRate} style={({ pressed }) => [styles.primary, { marginTop: 0 }, pressed && { opacity: 0.85 }, submittingRate && { opacity: 0.7 }]}>
                 {submittingRate ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Envoyer</Text>}
               </Pressable>
             </View>
@@ -181,14 +221,22 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surface },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.color.surface },
   back: { position: "absolute", left: theme.spacing.lg, width: 44, height: 44, borderRadius: 22, backgroundColor: theme.color.surface, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
-  sheet: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: theme.color.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.md, maxHeight: "70%" },
+  sheet: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: theme.color.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.md, maxHeight: "72%" },
   handle: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: theme.color.borderStrong, marginBottom: theme.spacing.md },
-  status: { fontSize: 20, fontWeight: "800", color: theme.color.onSurface, marginBottom: theme.spacing.lg },
+  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: theme.spacing.md },
+  status: { fontSize: 20, fontWeight: "800", color: theme.color.onSurface, flex: 1 },
+  etaPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: theme.color.surfaceSecondary, paddingHorizontal: theme.spacing.md, height: 32, borderRadius: theme.radius.pill },
+  etaText: { fontSize: 13, fontWeight: "800", color: theme.color.onSurface },
+  arrivingBox: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: "#EAF6EE", borderRadius: theme.radius.md, padding: theme.spacing.md, marginBottom: theme.spacing.md },
+  arrivingText: { flex: 1, fontSize: 13, fontWeight: "700", color: theme.color.success },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: theme.spacing.sm },
+  infoText: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   driverCard: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.md, marginBottom: theme.spacing.lg },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#fff", fontSize: 18, fontWeight: "800" },
   driverName: { fontSize: 16, fontWeight: "700", color: theme.color.onSurface },
   driverRating: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
+  live: { fontSize: 11, color: theme.color.success, fontWeight: "700", marginLeft: 6 },
   plate: { alignItems: "flex-end" },
   plateModel: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   plateNum: { fontSize: 12, color: theme.color.onSurfaceTertiary, marginTop: 2 },
@@ -199,13 +247,19 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   routeText: { flex: 1, fontSize: 14, color: theme.color.onSurface, fontWeight: "500" },
   line: { width: 1, height: 12, backgroundColor: theme.color.borderStrong, marginLeft: 4, marginVertical: 6 },
-  priceBox: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.lg },
-  priceLabel: { fontSize: 14, color: theme.color.onSurfaceSecondary },
+  notes: { fontSize: 13, color: theme.color.onSurfaceSecondary, marginTop: theme.spacing.sm },
+  priceBox: { marginBottom: theme.spacing.lg, gap: 4 },
+  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  priceLabel: { fontSize: 13, color: theme.color.onSurfaceSecondary },
+  priceSmall: { fontSize: 13, color: theme.color.onSurface, fontWeight: "600" },
+  priceTotalLabel: { fontSize: 15, fontWeight: "800", color: theme.color.onSurface },
   priceValue: { fontSize: 22, fontWeight: "800", color: theme.color.onSurface },
+  payRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  payText: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   rateBox: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.lg, marginBottom: theme.spacing.lg, alignItems: "center" },
   rateTitle: { fontSize: 16, fontWeight: "700", marginBottom: theme.spacing.md, color: theme.color.onSurface },
   stars: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
-  primary: { backgroundColor: theme.color.brand, height: 48, paddingHorizontal: theme.spacing.xl, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
+  primary: { backgroundColor: theme.color.brand, height: 50, paddingHorizontal: theme.spacing.xl, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", alignSelf: "stretch", marginBottom: theme.spacing.md },
   primaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
   cancelBtn: { height: 52, borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   cancelText: { color: theme.color.error, fontWeight: "700", fontSize: 15 },

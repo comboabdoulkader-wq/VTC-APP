@@ -9,10 +9,13 @@ import { apiFetch, useAuth } from "@/src/context/auth";
 
 type Ride = any;
 
+type Earnings = { total: number; commission: number; net: number; rides_count: number; commission_rate: number; platform: { count: number; gross: number }; private: { count: number; gross: number; commission: number } };
+const EMPTY: Earnings = { total: 0, commission: 0, net: 0, rides_count: 0, commission_rate: 0.15, platform: { count: 0, gross: 0 }, private: { count: 0, gross: 0, commission: 0 } };
+
 export default function Earnings() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const [earnings, setEarnings] = useState<{ total: number; rides_count: number }>({ total: 0, rides_count: 0 });
+  const [earnings, setEarnings] = useState<Earnings>(EMPTY);
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,9 +43,24 @@ export default function Earnings() {
       <Text style={styles.title}>Mes gains</Text>
 
       <View style={styles.hero}>
-        <Text style={styles.heroLabel}>Total gagné</Text>
-        <Text style={styles.heroValue}>{earnings.total.toFixed(2)} €</Text>
-        <Text style={styles.heroMeta}>{earnings.rides_count} course{earnings.rides_count > 1 ? "s" : ""} terminée{earnings.rides_count > 1 ? "s" : ""}</Text>
+        <Text style={styles.heroLabel}>Net chauffeur</Text>
+        <Text style={styles.heroValue}>{earnings.net.toFixed(2)} €</Text>
+        <Text style={styles.heroMeta}>{earnings.rides_count} course{earnings.rides_count > 1 ? "s" : ""} terminée{earnings.rides_count > 1 ? "s" : ""} · brut {earnings.total.toFixed(2)} €</Text>
+      </View>
+
+      <View style={styles.split} testID="earnings-split">
+        <View style={styles.splitCard}>
+          <Icon name="cellphone" size={20} color={theme.color.onSurface} />
+          <Text style={styles.splitLabel}>Plateforme</Text>
+          <Text style={styles.splitVal}>{earnings.platform.gross.toFixed(2)} €</Text>
+          <Text style={styles.splitMeta}>{earnings.platform.count} course{earnings.platform.count > 1 ? "s" : ""} · 0 % commission</Text>
+        </View>
+        <View style={styles.splitCard}>
+          <Icon name="notebook-outline" size={20} color={theme.color.onSurface} />
+          <Text style={styles.splitLabel}>Privées</Text>
+          <Text style={styles.splitVal}>{earnings.private.gross.toFixed(2)} €</Text>
+          <Text style={[styles.splitMeta, { color: theme.color.warning }]}>− {earnings.private.commission.toFixed(2)} € ({Math.round(earnings.commission_rate * 100)} %)</Text>
+        </View>
       </View>
 
       <Text style={styles.section}>Historique</Text>
@@ -57,10 +75,13 @@ export default function Earnings() {
         rides.map((r) => (
           <View key={r.id} style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowDate}>{new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}</Text>
+              <Text style={styles.rowDate}>{new Date(r.completed_at || r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })} · {r.source === "private" ? "Privée" : "Plateforme"}{r.payment_method === "card" ? " · 💳" : ""}</Text>
               <Text style={styles.rowAddr} numberOfLines={1}>{r.dropoff.address}</Text>
             </View>
-            <Text style={styles.rowPrice}>+{r.price.toFixed(2)} €</Text>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.rowPrice}>+{r.price.toFixed(2)} €</Text>
+              {r.commission_amount > 0 && <Text style={styles.rowCommission}>− {r.commission_amount.toFixed(2)} €</Text>}
+            </View>
           </View>
         ))
       )}
@@ -70,7 +91,13 @@ export default function Earnings() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "800", color: theme.color.onSurface, marginBottom: theme.spacing.lg, letterSpacing: -1 },
-  hero: { backgroundColor: theme.color.brand, borderRadius: theme.radius.lg, padding: theme.spacing.xl, marginBottom: theme.spacing.xl },
+  hero: { backgroundColor: theme.color.brand, borderRadius: theme.radius.lg, padding: theme.spacing.xl, marginBottom: theme.spacing.md },
+  split: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.xl },
+  splitCard: { flex: 1, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.md, gap: 2 },
+  splitLabel: { fontSize: 12, fontWeight: "700", color: theme.color.onSurfaceSecondary, marginTop: 4 },
+  splitVal: { fontSize: 18, fontWeight: "800", color: theme.color.onSurface },
+  splitMeta: { fontSize: 11, color: theme.color.onSurfaceTertiary, fontWeight: "600" },
+  rowCommission: { fontSize: 11, color: theme.color.warning, fontWeight: "700" },
   heroLabel: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "600" },
   heroValue: { color: "#fff", fontSize: 40, fontWeight: "800", marginTop: 4, letterSpacing: -1 },
   heroMeta: { color: "rgba(255,255,255,0.7)", fontSize: 14, marginTop: 8 },

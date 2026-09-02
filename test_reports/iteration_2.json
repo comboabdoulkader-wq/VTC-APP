@@ -1,0 +1,76 @@
+{
+  "summary": "Iteration 2 (multi-orders + rallonge + private rides + team + Stripe + GPS/notifications) — Backend: 11/11 new-feature pytest cases PASS (100%). All new endpoints verified end-to-end: estimate w/ surcharge (48.95,2.45 → 15.12 €), ride create with surcharge/scheduled_at/passenger_label/notes/payment_method, POST /rides/batch (shared batch_id, active-list includes them), driver /available filter, accept/location→arrival_alert (fires once + creates 'arriving' notification, subsequent pings do not re-alert), cash ride completes with payment_status paid, Stripe /payments/config card_enabled=true, /payments/checkout returns https://checkout.stripe.com URL and status=pending, private rides create/complete (commission 9.0 = 60×0.15) + DELETE only for non-completed, /driver/earnings split, team add member/assign/overview/deactivate → login 403 'Compte désactivé'/reactivate, member cannot manage own team (403), notifications list/read/read-all. Frontend (390×844 web preview): passenger login OK, pickup-chip change + place-4 (CDG) + place-1 (Tour Eiffel) OK, surcharge-card renders correctly ('23.0 km du centre (Paris – Châtelet) × 1.20 € → +27.60 €'), price-breakdown updates when surcharge-switch toggled, schedule-day-Demain + 96 schedule-time-* chips work, for-other/passenger-label-input/pay-card/notes-input all present. CRITICAL BUG: interacting with BottomSheetTextInput (notes-input / passenger-label-input) throws Uncaught Error 'RNTextInput.default.State.currentlyFocusedInput is not a function' from @gorhom/bottom-sheet — this prevents add-to-cart from working reliably on web (cart-item-0 not created after add-to-cart click). Overall backend 100% success, frontend passenger flow ~80% (options rendering perfect, cart broken by gorhom/RNW incompatibility). Legacy /app/backend/tests/test_vtc_api.py has 2 pre-existing failures caused by iteration 2 API contract changes (estimate response shape + new base_fare pricing) — NOT new regressions but the old tests should be updated by main agent.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/rides/estimate response shape change", "issue": "Old test_vtc_api.py test_estimate expects list of 3 options; now returns {options:[...], surcharge:{...}}. Update legacy test."},
+      {"endpoint": "GET /api/driver/earnings pricing", "issue": "test_driver_earnings expected total >= 15.50 but new base_fare gives 15.20 for the (48.8566,2.3522)→(48.8738,2.2950) trip. Update assertion or accept the new pricing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "@gorhom/bottom-sheet BottomSheetTextInput (notes-input, passenger-label-input, destination-search)",
+        "issue": "Uncaught Error 'RNTextInput.default.State.currentlyFocusedInput is not a function' thrown from node_modules/@gorhom/bottom-sheet/lib/module/components/bottomSheetTextInput/BottomSheetTextInput.js:37:66 when the input receives blur/focus events on react-native-web. Latest RNW removed TextInput.State.currentlyFocusedInput (replaced by document.activeElement / currentlyFocusedField). Consequence: after typing in notes-input or passenger-label-input, the app crashes → add-to-cart-button click no longer creates a cart-item-0. The single-order 'confirm-ride-button' path still works because it happens before the crash, but the cart & subsequent options interactions are blocked.",
+        "testID": "notes-input, passenger-label-input",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "Overall pipeline",
+        "issue": "During heavy passenger interaction we also observed one HTTP 429 response from the backend — worth confirming there is no aggressive rate-limit on /api/rides/estimate that could hit normal users when toggling options.",
+        "testID": "N/A",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Multi-order cart (add-to-cart → cart-item-0 → cart-add-more → cart-order-all)",
+        "issue": "Blocked on web by the gorhom BottomSheetTextInput crash above. Backend POST /api/rides/batch works perfectly (verified in pytest).",
+        "affected_testIDs": ["add-to-cart-button", "cart-item-0", "cart-add-more", "cart-order-all"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Passenger home options",
+        "issues": [
+          "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' (RN-Web) — cosmetic, cumulative from iter1.",
+          "React 19 warning: 'Accessing element.ref was removed in React 19' — still present, likely from a nav lib."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "@gorhom/bottom-sheet",
+        "issue": "Package incompatible with current react-native-web (removed TextInput.State.currentlyFocusedInput). Either upgrade @gorhom/bottom-sheet to a version compatible with RN 0.76+/RNW, apply a shim (window.__reactNativeWebTextInputState / polyfill on TextInput.default.State.currentlyFocusedInput = () => document.activeElement), or replace BottomSheetTextInput usage with plain TextInput inside the sheet on web. Reference: node_modules/@gorhom/bottom-sheet/lib/module/components/bottomSheetTextInput/BottomSheetTextInput.js:37"
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/new_features.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "HIGH: Fix @gorhom/bottom-sheet BottomSheetTextInput crash on web — polyfill TextInput.State.currentlyFocusedInput or upgrade the package. This blocks the cart multi-order flow on web preview. Suggested quick shim in app entry: import { TextInput } from 'react-native'; if (typeof window !== 'undefined' && TextInput && !TextInput.State?.currentlyFocusedInput) { TextInput.State = { ...(TextInput.State||{}), currentlyFocusedInput: () => document.activeElement, currentlyFocusedField: () => document.activeElement }; }",
+    "LOW: Update legacy /app/backend/tests/test_vtc_api.py — test_estimate and test_driver_earnings now fail because of the iteration 2 pricing / response shape changes (not real bugs). Either update assertions or delete since /app/backend/tests/test_new_features.py already covers the new contract.",
+    "LOW: Investigate a possible rate-limit (HTTP 429 seen once during heavy /rides/estimate polling from RideOptions)."
+  ],
+  "critical_code_review_comments": [
+    "routes/rides.py accept_ride correctly guards double-accept (409) and honours assigned_driver_id (403).",
+    "routes/driver.py driver_location correctly sets arrival_notified only once — verified with a second ping returning arrival_alert=false.",
+    "routes/payments.py: return_url whitelisting is minimal (startswith https/exp/frontend) — acceptable for a demo; consider a strict domain allow-list before production.",
+    "routes/team.py assign_ride sets assigned_by + assigned_by_name in DB but RideOut model only exposes assigned_by_name (not assigned_by). Not a bug per spec but worth confirming with frontend consumer.",
+    "routes/team.py overview: computes online_count/active_count in Python, fine at current scale.",
+    "routes/rides.py rate_ride formula now correctly uses driver.rated_count (fix from iter1 comment). Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py (created, 11 tests, all passing)",
+    "/app/test_reports/pytest/new_features.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (11/11 new-feature tests) + 33/35 overall (2 legacy failures due to iter2 API changes)", "frontend": "~75% — passenger login+destination+options+surcharge+schedule+payment/label/notes rendering all work; add-to-cart & subsequent cart flow broken by @gorhom/bottom-sheet crash on web"},
+  "seed_data_creation": "Created unique test users test_pax_<uuid>@example.com / test_drv_<uuid>@example.com / test_mem_<uuid>@example.com via /api/auth/register. Used stated credentials for the frontend E2E. All test rides prefixed via test users; cancelled leftover rides at end of pytest run.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "1) Backend suite: run `pytest /app/backend/tests/test_new_features.py -v` — should be 11/11 green. 2) The gorhom bottom-sheet TextInput crash happens the moment a BottomSheetTextInput receives blur (e.g. after typing in notes-input, passenger-label-input, or destination-search). After main agent applies the shim, re-run the frontend flow: add-to-cart → cart-item-0 → cart-add-more → cart-order-all → verify navigation to /rides shows both cards with tags. 3) Driver flow (chauffeur@test.com online → accept → im-here → start → complete) and Team tab (add-member/assign) were NOT UI-tested this iteration because the passenger cart crash consumed the time budget; backend equivalents all pass. 4) Do NOT complete a real Stripe payment; the pay-card-button open-checkout path is the sole assertion. 5) Test file uses EXPO_PUBLIC_BACKEND_URL (loaded from frontend/.env).",
+  "rca_of_issue": "Root cause of the cart crash: @gorhom/bottom-sheet's BottomSheetTextInput imports react-native's TextInput and, on blur, calls TextInput.State.currentlyFocusedInput() to decide whether to blur the underlying native input. Recent react-native-web versions removed the deprecated TextInput.State API (kept only in RN core). On web the property is undefined → TypeError, which becomes an Uncaught Error that unmounts the RideOptions bottom sheet before the add-to-cart onPress handler runs, so no cart entry is created. Reproduction: passenger home → tap pickup-chip → pick CDG → pick Tour Eiffel → in options bottom sheet, type any character in 'notes-input' or 'passenger-label-input' → click outside → red error banner. Fix (minimal): polyfill TextInput.State.currentlyFocusedInput = () => document.activeElement at app boot for web only. Long-term: upgrade @gorhom/bottom-sheet to a version that no longer relies on the removed API, or swap BottomSheetTextInput for a plain TextInput inside the sheet."
+}

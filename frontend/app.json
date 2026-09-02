@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.vtcplatform.q33vdy"
+      "bundleIdentifier": "com.emergent.vtcplatform.q33vdy",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Partager votre position pour le suivi de course en direct"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.vtcplatform.q33vdy"
+      "package": "com.emergent.vtcplatform.q33vdy",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "VIBRATE"]
     },
     "web": {
       "bundler": "metro",
@@ -36,7 +40,14 @@
           "backgroundColor": "#000000"
         }
       ],
-      "@react-native-vector-icons/material-design-icons"
+      "@react-native-vector-icons/material-design-icons",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Partager votre position pour le suivi de course en direct"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

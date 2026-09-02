@@ -101,3 +101,43 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Iteration 2 – Feature expansion (main agent)
+user_problem_statement: "Ajoute tout : commandes multiples, rallonge 1,20 €/km (centre = Châtelet), courses privées + commission 15 %, gestion d'équipe multi-chauffeurs, GPS live chauffeur, paiement Stripe (clé rk_test fournie), alerte in-app 'chauffeur à 2 min' (SMS via Twilio prêt à brancher), courses programmées."
+backend:
+  - task: "Estimate with surcharge, ride create/batch w/ options, scheduled rides, available filtering incl. assigned_driver_id"
+    file: "/app/backend/routes/rides.py"
+    needs_retesting: true
+  - task: "Driver location ping + 2-min arrival notification, earnings split, private rides CRUD w/ 15% commission"
+    file: "/app/backend/routes/driver.py"
+    needs_retesting: true
+  - task: "Team: members CRUD, assign, overview, deactivated member login 403"
+    file: "/app/backend/routes/team.py"
+    needs_retesting: true
+  - task: "Stripe checkout session + status verification"
+    file: "/app/backend/routes/payments.py"
+    needs_retesting: true
+  - task: "Notifications list/read"
+    file: "/app/backend/routes/notifications.py"
+    needs_retesting: true
+frontend:
+  - task: "Passenger home: pickup change, options (surcharge/schedule/label/payment/notes), cart multi-orders"
+    file: "/app/frontend/app/(passenger)/index.tsx, src/components/passenger/RideOptions.tsx"
+    needs_retesting: true
+  - task: "Ride detail: ETA, driver marker, price breakdown, pay by card, rating"
+    file: "/app/frontend/app/(passenger)/ride/[id].tsx"
+    needs_retesting: true
+  - task: "Driver home: GPS permission card, tags, 'Je suis sur place', accept/start/complete"
+    file: "/app/frontend/app/(driver)/index.tsx"
+    needs_retesting: true
+  - task: "Driver private rides tab + form"
+    file: "/app/frontend/app/(driver)/private.tsx"
+    needs_retesting: true
+  - task: "Driver team tab: add member, detail, assign, toggle active"
+    file: "/app/frontend/app/(driver)/team.tsx"
+    needs_retesting: true
+  - task: "Notifications banner (both roles)"
+    file: "/app/frontend/src/components/NotificationsBanner.tsx"
+    needs_retesting: true
+agent_communication:
+  - agent: "main"
+    message: "Backend restructured into routes/*. Smoke script /app/backend/tests/smoke_new_features.py passes end-to-end (estimate→batch→checkout→accept→location→alert→complete, private ride + commission, team add/assign/deactivate). Stripe checkout URL generation verified with the user's rk_test key."

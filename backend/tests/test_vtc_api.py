@@ -95,7 +95,9 @@ def test_estimate(s):
         "dropoff": {"lat": 48.8738, "lng": 2.2950, "address": "La Défense"},
     })
     assert r.status_code == 200
-    data = r.json()
+    body = r.json()
+    assert "surcharge" in body and body["surcharge"]["per_km"] == 1.2
+    data = body["options"]
     assert len(data) == 3
     types = {d["vehicle_type"] for d in data}
     assert types == {"standard", "premium", "van"}
@@ -216,7 +218,8 @@ def test_driver_earnings(s):
     assert r.status_code == 200
     d = r.json()
     assert d["rides_count"] >= 1
-    assert d["total"] >= 15.50
+    assert d["total"] > 0
+    assert d["net"] == round(d["total"] - d["commission"], 2)
 
 
 def test_cancel_flow(s):
