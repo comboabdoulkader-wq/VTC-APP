@@ -127,3 +127,7 @@ See /app/memory/test_credentials.md
 - Receipts: `emailer.py` (Emergent Resend proxy, EMAIL_FROM_NAME env), auto after paid completion, `GET /rides/{id}/receipt.pdf`, `POST /rides/{id}/send-receipt`, signed `GET /receipts/{id}.pdf?sig=`; UI buttons on ride detail
 - Google sign-in: `POST /auth/session` (Emergent session-data → our JWT), `useGoogleAuth`/`GoogleButton` on login & register, callback in `app/index.tsx`
 - Responsive: `useResponsive` (compact/tablet/desktop, FRAME_WIDTH 560), framed root & SheetModal on ≥600 px, dynamic snap points, wrap rows on compact phones, capped font scaling. Audit tested on 320/390/768/844x390/1280 – all pass
+
+## Iteration 18 – Partner space hotels/concierges/agencies (DONE, tested 11/11 + UI)
+- `partner_type` at company sign-up (hotel/concierge/agency → `partner_discount` env PARTNER_DISCOUNT=0.10). `POST/GET /company/bookings`, `GET /company/partner`; rides flagged `partner_booking`, `payment_status=invoiced`, guest SMS (booking + tracking link on accept). Company tab "Clients" (bookings.tsx + PartnerBookingForm). Geo search now biased to user position / Paris.
+- Test account hotel.ritz@test.com / password123

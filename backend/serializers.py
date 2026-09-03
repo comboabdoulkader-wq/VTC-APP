@@ -101,4 +101,9 @@ def ride_to_out(r: dict) -> RideOut:
         fixed_route_name=r.get("fixed_route_name"),
         flight=r.get("flight"),
         review=r.get("review"),
+        partner_booking=bool(r.get("partner_booking")),
+        partner_name=r.get("partner_name"),
+        partner_discount_amount=r.get("partner_discount_amount", 0),
+        guest_name=r.get("guest_name"),
+        room=r.get("room"),
     )

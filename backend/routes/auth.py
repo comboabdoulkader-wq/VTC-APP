@@ -1,4 +1,5 @@
 import hashlib
+import os
 import hmac
 import secrets
 from datetime import timedelta
@@ -65,6 +66,9 @@ async def register(data: RegisterIn, request: Request):
             raise HTTPException(422, "Nom de l'entreprise requis")
         user["company_name"] = data.company_name
         user["invite_code"] = secrets.token_hex(3).upper()
+        user["partner_type"] = data.partner_type
+        # Hotels, concierges and agencies get the partner rate on guest bookings
+        user["partner_discount"] = float(os.environ.get("PARTNER_DISCOUNT", "0.10")) if data.partner_type != "company" else 0.0
     await db.users.insert_one(user.copy())
     user["is_moderator"] = email in MODERATOR_EMAILS
     return TokenOut(access_token=make_token(user), user=user_to_out(user))

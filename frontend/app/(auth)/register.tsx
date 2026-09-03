@@ -23,6 +23,7 @@ export default function Register() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [partnerType, setPartnerType] = useState<"company" | "hotel" | "concierge" | "agency">("company");
   const [referral, setReferral] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export default function Register() {
         vehicle_model: role === "driver" ? vehicleModel.trim() : undefined,
         license_plate: role === "driver" ? licensePlate.trim() : undefined,
         company_name: role === "company" ? companyName.trim() : undefined,
+        partner_type: role === "company" ? partnerType : undefined,
         referral_code: referral.trim() || undefined,
       });
       // A phone number was given → offer to verify it by SMS right away (skippable)
@@ -100,7 +102,15 @@ export default function Register() {
 
         {role === "company" && (
           <View style={styles.field}>
-            <Text style={styles.label}>Nom de l'entreprise</Text>
+            <Text style={styles.label}>Type de compte</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.lg }}>
+              {([["company", "Entreprise"], ["hotel", "Hôtel"], ["concierge", "Conciergerie"], ["agency", "Agence"]] as const).map(([k, l]) => (
+                <Pressable key={k} testID={`partner-type-${k}`} onPress={() => setPartnerType(k)} style={[styles.typeChip, partnerType === k && styles.typeChipActive]}>
+                  <Text style={[styles.typeChipText, partnerType === k && { color: theme.color.onBrand }]}>{l}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>{partnerType === "hotel" ? "Nom de l'hôtel" : partnerType === "company" ? "Nom de l'entreprise" : "Nom de la société"}</Text>
             <TextInput testID="company-name-input" value={companyName} onChangeText={setCompanyName} placeholder="Acme Conseil" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
           </View>
         )}
@@ -181,6 +191,9 @@ const styles = StyleSheet.create({
   field: { marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.onSurfaceSecondary, marginBottom: theme.spacing.sm },
   input: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 56, fontSize: 16, color: theme.color.onSurface },
+  typeChip: { height: 40, paddingHorizontal: theme.spacing.lg, borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
+  typeChipActive: { backgroundColor: theme.color.brand },
+  typeChipText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   pwdRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   eye: { width: 48, height: 56, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
   error: { color: theme.color.error, fontSize: 14, marginBottom: theme.spacing.md },

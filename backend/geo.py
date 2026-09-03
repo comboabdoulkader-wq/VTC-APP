@@ -36,8 +36,10 @@ def _format(f: dict) -> dict:
 
 async def search(q: str, lat: Optional[float] = None, lng: Optional[float] = None, limit: int = 6) -> List[dict]:
     params = {"q": q, "limit": limit, "lang": "fr"}
-    if lat is not None and lng is not None:
-        params.update({"lat": lat, "lon": lng})
+    # Bias results towards the user's position, or Paris (our main market) when unknown – avoids "Ritz" → Finland.
+    if lat is None or lng is None:
+        lat, lng = 48.8566, 2.3522
+    params.update({"lat": lat, "lon": lng, "zoom": 11, "location_bias_scale": 0.5})
     try:
         async with httpx.AsyncClient(timeout=6, headers=HEADERS) as http:
             r = await http.get(f"{PHOTON}/api/", params=params)

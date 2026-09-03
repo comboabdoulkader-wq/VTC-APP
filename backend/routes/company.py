@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from core import current_user, db, now_utc, require_role
-from models import EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, RideOut
+from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, RideOut
 from reports import build_csv, build_pdf, group_rides, month_label, rides_for
 from serializers import ride_to_out, user_to_out
 
@@ -150,3 +150,58 @@ async def export_pdf(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(
     pdf = build_pdf(f"Relevé de courses professionnelles — {user.get('company_name')}", f"Période : {month_label(month)} · {len(rides)} course(s)",
                     group_rides(rides, "passenger_id", "passenger_name"), "employé")
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="releve-pro-{month}.pdf"'})
+
+
+# ---------- Partner space (hotels, concierges, agencies): book & follow rides for guests ----------
+@router.post("/bookings", response_model=RideOut, status_code=201)
+async def create_partner_booking(data: PartnerBookingIn, user=Depends(company_only)):
+    from routes.rides import build_ride, push_new_rides_to_drivers
+    from core import normalize_phone, send_sms, tracking_url
+    from models import RideCreateIn
+    phone = None
+    if data.guest_phone and data.guest_phone.strip():
+        phone = normalize_phone(data.guest_phone)
+        if not phone:
+            raise HTTPException(422, "Téléphone du client invalide (format +33 6 12 34 56 78)")
+    label = f"{data.guest_name.strip()}" + (f" · ch. {data.room.strip()}" if data.room and data.room.strip() else "")
+    ride_in = RideCreateIn(**data.model_dump(exclude={"guest_name", "guest_phone", "room", "notes"}), for_other=True,
+                           passenger_label=label, notes=data.notes, payment_method="cash", business=False)
+    ride = await build_ride(ride_in, user)
+    discount = float(user.get("partner_discount") or 0)
+    partner_discount_amount = round(ride["price"] * discount, 2) if discount else 0.0
+    ride.update({
+        "business": True, "company_id": user["id"], "partner_booking": True, "partner_name": user.get("company_name"),
+        "passenger_phone": phone, "guest_name": data.guest_name.strip(), "room": (data.room or "").strip() or None,
+        "partner_discount": discount, "partner_discount_amount": partner_discount_amount,
+        "price": round(ride["price"] - partner_discount_amount, 2), "due_amount": round(ride["price"] - partner_discount_amount, 2),
+        "payment_status": "invoiced",  # settled on the partner's monthly invoice
+    })
+    await db.rides.insert_one(ride.copy())
+    await push_new_rides_to_drivers([ride])
+    if phone:
+        when = ride["scheduled_at"].strftime("%d/%m à %H:%M") if ride.get("scheduled_at") else "dès maintenant"
+        url = tracking_url(ride)
+        await send_sms(phone, f"RideGo · {user.get('company_name')} vous a réservé un chauffeur ({when}) : {ride['pickup']['address']} → {ride['dropoff']['address']}."
+                              + (f" Suivi : {url}" if url else ""))
+    return ride_to_out(ride)
+
+
+@router.get("/bookings", response_model=List[RideOut])
+async def partner_bookings(status: Optional[str] = None, user=Depends(company_only)):
+    q = {"company_id": user["id"], "partner_booking": True}
+    if status == "active":
+        q["status"] = {"$in": ["requested", "accepted", "in_progress"]}
+    elif status:
+        q["status"] = status
+    return [ride_to_out(r) async for r in db.rides.find(q, {"_id": 0}).sort("created_at", -1).limit(200)]
+
+
+@router.get("/partner")
+async def partner_info(user=Depends(company_only)):
+    from core import tracking_url
+    active = [r async for r in db.rides.find({"company_id": user["id"], "partner_booking": True, "status": {"$in": ["requested", "accepted", "in_progress"]}}, {"_id": 0})]
+    return {
+        "partner_type": user.get("partner_type", "company"), "partner_discount": user.get("partner_discount", 0.0),
+        "company_name": user.get("company_name"), "active_bookings": len(active),
+        "tracking_base": tracking_url({"share_token": "X"}).rsplit("/X", 1)[0] if tracking_url({"share_token": "X"}) else None,
+    }

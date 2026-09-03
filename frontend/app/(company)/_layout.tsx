@@ -19,6 +19,7 @@ export default function CompanyLayout() {
         }}
       >
         <Tabs.Screen name="index" options={{ title: t("tab_dashboard"), tabBarIcon: ({ color, size }) => <Icon name="view-dashboard-outline" size={size} color={color} /> }} />
+        <Tabs.Screen name="bookings" options={{ title: "Clients", tabBarIcon: ({ color, size }) => <Icon name="bell-ring-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="employees" options={{ title: t("tab_employees"), tabBarIcon: ({ color, size }) => <Icon name="account-group-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="profile" options={{ title: t("company"), tabBarIcon: ({ color, size }) => <Icon name="office-building-outline" size={size} color={color} /> }} />
       </Tabs>

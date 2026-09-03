@@ -58,6 +58,7 @@ type RegisterPayload = {
   vehicle_model?: string;
   license_plate?: string;
   company_name?: string;
+  partner_type?: string;
   referral_code?: string;
 };
 

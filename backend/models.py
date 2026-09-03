@@ -10,7 +10,7 @@ RideStatus = Literal["requested", "accepted", "in_progress", "completed", "cance
 VehicleType = Literal["standard", "premium", "van", "van_premium", "group"]
 ServiceType = Literal["private", "airport", "hourly", "business", "city_tour", "events", "long_distance", "special"]
 PaymentMethod = Literal["cash", "card"]
-PaymentStatus = Literal["unpaid", "pending", "paid"]
+PaymentStatus = Literal["unpaid", "pending", "paid", "invoiced"]
 RideSource = Literal["platform", "private"]
 
 
@@ -23,6 +23,7 @@ class RegisterIn(BaseModel):
     vehicle_model: Optional[str] = Field(default=None, max_length=60)
     license_plate: Optional[str] = Field(default=None, max_length=20)
     company_name: Optional[str] = Field(default=None, max_length=80)
+    partner_type: Literal["company", "hotel", "concierge", "agency"] = "company"
     referral_code: Optional[str] = Field(default=None, max_length=12)
 
 
@@ -240,6 +241,11 @@ class RideOut(BaseModel):
     service_type: str = "private"
     service_label: str = "Chauffeur privé"
     service_labels: Optional[dict] = None
+    partner_booking: bool = False
+    partner_name: Optional[str] = None
+    partner_discount_amount: float = 0
+    guest_name: Optional[str] = None
+    room: Optional[str] = None
     hours: int = 0
     passengers: int = 1
     children: int = 0
@@ -259,6 +265,18 @@ class RateIn(BaseModel):
     cleanliness: Optional[int] = Field(default=None, ge=1, le=5)
     driving: Optional[int] = Field(default=None, ge=1, le=5)
     vehicle: Optional[int] = Field(default=None, ge=1, le=5)
+
+
+class PartnerBookingIn(TripDetailsMixin):
+    """Hotel / concierge booking on behalf of a guest (invoiced to the partner account)."""
+    pickup: LocationIn
+    dropoff: LocationIn
+    vehicle_type: VehicleType
+    scheduled_at: Optional[datetime] = None
+    guest_name: str = Field(min_length=1, max_length=80)
+    guest_phone: Optional[str] = Field(default=None, max_length=30)
+    room: Optional[str] = Field(default=None, max_length=20)
+    notes: Optional[str] = Field(default=None, max_length=300)
 
 
 class FixedRouteZone(BaseModel):

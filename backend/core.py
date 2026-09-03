@@ -316,7 +316,13 @@ def tracking_url(ride: dict) -> Optional[str]:
 async def send_tracking_link(ride: dict):
     """SMS the passenger a live tracking link once a driver is assigned (verified phone + SMS alerts enabled)."""
     url = tracking_url(ride)
-    if not url or not ride.get("passenger_id"):
+    if not url:
+        return
+    if ride.get("partner_booking") and ride.get("passenger_phone"):
+        # Guest booked by a hotel / concierge: they have no account → SMS straight to the guest
+        await send_sms(ride["passenger_phone"], f"RideGo · {ride.get('driver_name', 'Votre chauffeur')} arrive ({ride.get('driver_vehicle', '')} {ride.get('driver_plate', '')}). Suivez-le en direct : {url}")
+        return
+    if not ride.get("passenger_id"):
         return
     u = await db.users.find_one({"id": ride["passenger_id"]}, {"_id": 0, "phone": 1, "phone_verified": 1, "sms_enabled": 1})
     if u and u.get("phone_verified") and u.get("sms_enabled", True) and u.get("phone"):
