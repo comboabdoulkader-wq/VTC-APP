@@ -47,7 +47,7 @@ export default function PartnerBookings() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit>Réservations clients</Text>
-          <Text style={styles.subtitle}>{info?.company_name}{info?.partner_discount ? ` · tarif partenaire −${Math.round(info.partner_discount * 100)} %` : ""}</Text>
+          <Text style={styles.subtitle}>{info?.company_name}{info?.commission_rate ? ` · commission ${Math.round(info.commission_rate * 100)} %` : ""}{info?.partner_discount ? ` · tarif −${Math.round(info.partner_discount * 100)} %` : ""}</Text>
         </View>
         <Pressable testID="partner-new" onPress={() => setShowForm(true)} style={styles.newBtn}><Icon name="plus" size={20} color={theme.color.onBrand} /><Text style={styles.newText}>Réserver</Text></Pressable>
       </View>

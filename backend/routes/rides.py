@@ -306,8 +306,11 @@ async def complete_ride(ride_id: str, user=Depends(require_role("driver"))):
     if r.get("passenger_id"):
         await db.users.update_one({"id": r["passenger_id"]}, {"$inc": {"total_rides": 1}})
     r.update(update)
-    from routes.referral import distribute_referral
-    await distribute_referral(r)
+    from routes.referral import distribute_referral, distribute_partner_commission
+    if r.get("partner_booking"):
+        await distribute_partner_commission(r)
+    else:
+        await distribute_referral(r)
     await notify(r.get("passenger_id"), "completed", "Course terminée",
                  f"Merci d'avoir voyagé avec {user['full_name']}. Notez votre chauffeur !", ride_id, sms=True)
     await send_ride_receipt(r)  # cash / wallet-paid rides: receipt right away (card rides: after payment)

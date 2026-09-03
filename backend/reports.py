@@ -79,6 +79,50 @@ def build_csv(rides: List[dict]) -> str:
     return buf.getvalue()
 
 
+def build_commission_pdf(title: str, subtitle: str, lines: List[dict], totals: dict) -> bytes:
+    """Monthly commission statement for a partner (hotel/concierge/agency)."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=14 * mm, bottomMargin=14 * mm)
+    st = getSampleStyleSheet()
+    story = [Paragraph(title, st["Title"]), Paragraph(subtitle, st["Normal"]), Spacer(1, 6 * mm)]
+    summary = [
+        ["Commissions du mois", f"{totals.get('earned', 0):.2f} €"],
+        ["  · Commissions directes (vos clients)", f"{totals.get('direct', 0):.2f} €"],
+        ["  · Commissions réseau (filleuls)", f"{totals.get('network', 0):.2f} €"],
+        ["Nombre de commissions", str(totals.get("count", 0))],
+        ["Solde du portefeuille", f"{totals.get('balance', 0):.2f} €"],
+    ]
+    t = Table(summary, hAlign="LEFT", colWidths=[110 * mm, 45 * mm])
+    t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F0F0F0")), ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+        ("FONTSIZE", (0, 0), (-1, -1), 10), ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+    ]))
+    story += [t, Spacer(1, 8 * mm), Paragraph("Détail des commissions", st["Heading2"])]
+    if lines:
+        headers = ["Date", "Origine", "Détail", "Montant €"]
+        data = [headers]
+        small = st["Normal"].clone("small2"); small.fontSize = 8; small.leading = 10
+        for l in lines:
+            d = l.get("created_at")
+            when = d.strftime("%d/%m/%Y %H:%M") if hasattr(d, "strftime") else str(d)[:16]
+            origin = {"partner_commission": "Client direct", "referral_l1": "Filleul", "referral_l2": "Réseau N2"}.get(l.get("type"), l.get("type"))
+            data.append([when, origin, Paragraph(l.get("label", ""), small), f"{l.get('amount', 0):.2f}"])
+        tt = Table(data, repeatRows=1, colWidths=[32 * mm, 26 * mm, 75 * mm, 22 * mm])
+        tt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#141414")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#DDDDDD")), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+        ]))
+        story.append(tt)
+    else:
+        story.append(Paragraph("Aucune commission sur cette période.", st["Normal"]))
+    story += [Spacer(1, 8 * mm), Paragraph("Les commissions sont créditées sur votre portefeuille et versées à votre demande.", st["Italic"])]
+    doc.build(story)
+    return buf.getvalue()
+
+
 def build_pdf(title: str, subtitle: str, groups: List[dict], group_title: str) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=14 * mm, bottomMargin=14 * mm)

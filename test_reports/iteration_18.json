@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 18 — Partner commissions (5%) for hotels/concierges/agencies. BACKEND: 13/13 pytest tests PASS (test_iteration18_partner_commissions.py, serial). Verified: (1) GET /api/company/partner returns commission_rate=0.05, wallet_balance, partner_type='hotel', partner_discount=0.1; passenger role gets 403. (2) POST /api/company/bookings creates a partner_booking ride (partner_booking=true, payment_status='invoiced'). (3) Commission crediting: since chauffeur@test.com is docs_blocked (cannot go through the driver HTTP flow), completion was simulated the same way /rides/{id}/complete does — status=completed in DB then distribute_partner_commission(ride) invoked directly. The hotel wallet was credited by exactly ride.price × 0.05 (4.28 € for an 85.50 € ride), a wallet_tx of type 'partner_commission' was created, ride was flagged partner_commission_paid=true with partner_commission_rate=0.05 and partner_commission_amount recorded. Second call to distribute_partner_commission produced NO additional credit — idempotency confirmed. (4) GET /api/company/commissions?month=2026-09 returns the full shape {balance, earned, direct, network, count, lines[], payouts[], rate}, rate=0.05, direct>0, ≥1 partner_commission line, and label='Toutes périodes' when month omitted. (5) POST /api/company/wallet/payout — {amount:5} → 422 with '10 €' minimum message; {amount:999999} → 400 'Solde insuffisant'; {amount:0} → 422 (gt=0); {amount:10} with sufficient balance → 200 {ok:true, amount:10, balance:balance-10}, wallet_tx of type 'payout' with amount=-10 written and appearing in commissions.payouts[]. (6) GET /api/company/commissions/export.pdf?month=2026-09&token=<jwt> → 200 application/pdf (bytes start with %PDF); month='abcd' → 422; without token → 403. FRONTEND (390×844): Sign-in with hotel.ritz@test.com → Company tab → profile shows 'Hôtel Ritz Paris', invite code ACA774, wallet 11.40 €. Tapping 'Commissions & versements' (open-commissions) opens the 'Relevé de commissions' sheet (partner-commissions). Every requested testID is present and functional: comm-balance shows '11.40 €', comm-prev/comm-next navigate months (sept. 26 → août 26 → sept. 26), hero explains 'Vous gagnez 5 % sur chaque course de vos clients', totals row 'Commissions du mois 21.40 € · Clients directs 21.40 € · Réseau 0.00 €', Detail (5) lists 5 '+4.28 €' lines labelled 'Commission client · course de TEST_Commission Guest', payout-input accepts numeric text, payout-btn tapped with 5 € → server returned 422 as expected (visible in devtools 'Failed to load resource: 422'). comm-pdf button 'Télécharger le relevé PDF' is visible. No React Native red screen, no console page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/company/commissions/export.pdf", "issue": "The month regex ^\\d{4}-\\d{2}$ accepts semantically invalid values like 2025-13 or 2025-00 → returns 500 (crash in reports.month_bounds) instead of 422. Tighten to ^\\d{4}-(0[1-9]|1[0-2])$ or validate month range."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PartnerCommissions.requestPayout / Alert.alert on web", "issue": "The payout error path calls Alert.alert('Impossible', e.message) but React Native Web has no Alert implementation, so when the API returns 422 ('Montant minimum de versement : 10 €') or 400 ('Solde insuffisant'), the user sees NOTHING — the input just stays filled with no visual feedback (network devtools show 422/400). Same class of bug as the 'Lien copié' silent alert reported in iteration 17. Recommend a Platform.OS==='web' branch using window.alert (or, better, an in-sheet inline error line/toast). Reference: /app/frontend/src/components/company/PartnerCommissions.tsx:50,55,57.", "testID": "payout-btn", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PartnerCommissions sheet", "issues": ["'Demander' button remains enabled while payout-input is empty; clicking with empty value triggers Alert.alert('Montant invalide') which is silent on web (same Alert.alert issue). Consider disabling payout-btn when parseFloat(payout) is NaN or <=0, or render an inline helper text."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18_partner_commissions.py",
+    "/app/test_reports/pytest/iteration18.xml"
+  ],
+  "action_items": [
+    "Fix silent web Alerts in PartnerCommissions (payout success + error + 'Montant invalide') — either wrap Alert.alert with a Platform.OS==='web' → window.alert fallback, or replace with an inline error/toast so hotels see when a payout is rejected. This is the same class of bug already flagged for PartnerBookings.share in iteration 17.",
+    "Optional: tighten the month=YYYY-MM regex on /company/commissions/export.pdf (and /company/export.pdf, /company/rides which reuse month_bounds) so semantically invalid months (2025-13, 2025-00) return 422 instead of 500."
+  ],
+  "critical_code_review_comments": [
+    "routes/referral.py:70-89 distribute_partner_commission is clean: it early-returns on missing partner_booking / missing company_id / partner_commission_paid, uses PARTNER_RATE (5%), credits via credit_wallet (which upserts wallet_tx), then flags the ride partner_commission_paid=true — guaranteeing idempotency. Level-2 cascade to the partner's own sponsor is also implemented.",
+    "routes/rides.py:309-313 correctly picks distribute_partner_commission for partner_booking rides and distribute_referral otherwise, and distribute_referral skips partner_booking (line 52), so no double-counting.",
+    "routes/company.py:262-276 request_payout — proper validation: <MIN_PAYOUT → 422, >balance → 400, otherwise a negative credit_wallet call recorded as type 'payout' and moderators notified. Balance is re-read fresh from DB before the check to avoid stale data. Clean.",
+    "routes/company.py:229-243 commissions endpoint returns rate=PARTNER_RATE, balance (fresh from DB), direct/network split, count, lines (last 500), and last 50 payouts — matches the frontend Data type in PartnerCommissions.tsx.",
+    "core.current_user (per iteration context) accepts ?token= query for the PDF export — confirmed working (200 %PDF...). PDF returns proper Content-Disposition attachment filename.",
+    "PartnerCommissions.tsx is a well-scoped 149-line component with all required testIDs. Only real UX gap: Alert.alert on web is a no-op — several affordances (invalid amount, payout OK, payout error) rely on it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration18_partner_commissions.py"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% of the requested partner-commissions flow (sheet open, testIDs, month nav, totals, detail, PDF button, payout input+button)"},
+  "seed_data_creation": "Created 5 partner bookings for hotel.ritz@test.com via POST /api/company/bookings (guest 'TEST_Commission Guest', room 101, Ritz→CDG). Each was marked completed via DB update and distribute_partner_commission was invoked, generating 5×4.28 € = 21.40 € of partner_commission wallet_tx for the hotel this month. One 10.00 € payout was requested during the test, leaving the wallet at 11.40 €. All test data is prefixed 'TEST_' and lives on the seeded hotel.ritz@test.com account.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "hotel.ritz@test.com / password123 already has ~11.40 € wallet balance and 5 completed partner-commission rides for month 2026-09 plus one 10 € payout. testIDs on the sheet: open-commissions (open button), partner-commissions (sheet), comm-balance, comm-prev, comm-next, comm-pdf, payout-input, payout-btn. Detail lines have testID comm-line-<id>. The web preview does NOT show Alert.alert dialogs — inspect network devtools for 422/400 responses or add a page.on('dialog') handler (only window.alert/confirm fire dialogs on RN Web). Because chauffeur@test.com is docs_blocked, the driver HTTP accept/start/complete flow cannot be used; simulate ride completion the same way test_iteration18_partner_commissions.py does — mark ride completed in DB + call distribute_partner_commission directly (motor is importable from /app/backend).",
+  "rca_of_issue": "N/A — partner-commissions feature is functional end-to-end. Two soft issues surfaced: (a) Alert.alert is a no-op on RN Web so all payout feedback is silent — reuse existing pattern from iteration 17, (b) the YYYY-MM regex on export.pdf permits invalid months (13, 00) leading to 500 in month_bounds; tighten to ^\\d{4}-(0[1-9]|1[0-2])$."
+}

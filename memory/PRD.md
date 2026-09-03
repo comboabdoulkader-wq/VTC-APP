@@ -131,3 +131,7 @@ See /app/memory/test_credentials.md
 ## Iteration 18 – Partner space hotels/concierges/agencies (DONE, tested 11/11 + UI)
 - `partner_type` at company sign-up (hotel/concierge/agency → `partner_discount` env PARTNER_DISCOUNT=0.10). `POST/GET /company/bookings`, `GET /company/partner`; rides flagged `partner_booking`, `payment_status=invoiced`, guest SMS (booking + tracking link on accept). Company tab "Clients" (bookings.tsx + PartnerBookingForm). Geo search now biased to user position / Paris.
 - Test account hotel.ritz@test.com / password123
+
+## Iteration 19 – Partner commissions 5 % + monthly statement + payout (DONE, tested 13/13 backend + UI)
+- Partners (hotel/concierge/agency) earn 5 % (PARTNER_RATE) on rides booked for their clients, credited to their wallet on ride completion (distribute_partner_commission, idempotent); cascades L2 3 % to the partner's sponsor. Existing guest discount kept (additive). Guest phone captured in db.partner_leads → on later signup the partner becomes sponsor (organic cascade). Endpoints: GET /company/commissions?month=, GET /company/commissions/export.pdf (reports.build_commission_pdf), POST /company/wallet/payout (min 10 €). /company/partner returns commission_rate+wallet_balance.
+- UI: PartnerCommissions sheet (company profile → "Commissions & versements"): month nav, wallet hero, totals (direct/réseau), lines, PDF, on-demand payout (web-aware alerts). Delivered /app/CAHIER_DES_CHARGES.md (enterprise-grade spec).

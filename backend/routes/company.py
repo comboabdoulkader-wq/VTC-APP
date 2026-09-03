@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from core import current_user, db, now_utc, require_role
-from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, RideOut
+from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, PayoutIn, RideOut
 from reports import build_csv, build_pdf, group_rides, month_label, rides_for
 from serializers import ride_to_out, user_to_out
 
@@ -130,7 +130,7 @@ async def overview(user=Depends(company_only)):
 
 
 @router.get("/report")
-async def report(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(company_only)):
+async def report(month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(company_only)):
     rides = await rides_for({"company_id": user["id"], "business": True}, month)
     groups = group_rides(rides, "passenger_id", "passenger_name")
     return {"month": month, "label": month_label(month), "count": len(rides), "total": round(sum(r["price"] for r in rides), 2),
@@ -138,14 +138,14 @@ async def report(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(comp
 
 
 @router.get("/export.csv")
-async def export_csv(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(company_only)):
+async def export_csv(month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(company_only)):
     rides = await rides_for({"company_id": user["id"], "business": True}, month)
     return Response(build_csv(rides), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="courses-pro-{month}.csv"'})
 
 
 @router.get("/export.pdf")
-async def export_pdf(month: str = Query(pattern=r"^\d{4}-\d{2}$"), user=Depends(company_only)):
+async def export_pdf(month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(company_only)):
     rides = await rides_for({"company_id": user["id"], "business": True}, month)
     pdf = build_pdf(f"Relevé de courses professionnelles — {user.get('company_name')}", f"Période : {month_label(month)} · {len(rides)} course(s)",
                     group_rides(rides, "passenger_id", "passenger_name"), "employé")
@@ -179,6 +179,11 @@ async def create_partner_booking(data: PartnerBookingIn, user=Depends(company_on
     await db.rides.insert_one(ride.copy())
     await push_new_rides_to_drivers([ride])
     if phone:
+        # Remember this guest so that, if they create their own account later with the same number,
+        # the partner becomes their sponsor and keeps earning cascading commissions on future rides.
+        await db.partner_leads.update_one({"phone": phone}, {"$set": {
+            "phone": phone, "sponsor_id": user["id"], "partner_name": user.get("company_name"), "updated_at": now_utc(),
+        }}, upsert=True)
         when = ride["scheduled_at"].strftime("%d/%m à %H:%M") if ride.get("scheduled_at") else "dès maintenant"
         url = tracking_url(ride)
         await send_sms(phone, f"RideGo · {user.get('company_name')} vous a réservé un chauffeur ({when}) : {ride['pickup']['address']} → {ride['dropoff']['address']}."
@@ -199,9 +204,73 @@ async def partner_bookings(status: Optional[str] = None, user=Depends(company_on
 @router.get("/partner")
 async def partner_info(user=Depends(company_only)):
     from core import tracking_url
+    from routes.referral import PARTNER_RATE
     active = [r async for r in db.rides.find({"company_id": user["id"], "partner_booking": True, "status": {"$in": ["requested", "accepted", "in_progress"]}}, {"_id": 0})]
     return {
         "partner_type": user.get("partner_type", "company"), "partner_discount": user.get("partner_discount", 0.0),
+        "commission_rate": PARTNER_RATE, "wallet_balance": round(user.get("wallet_balance", 0) or 0, 2),
         "company_name": user.get("company_name"), "active_bookings": len(active),
         "tracking_base": tracking_url({"share_token": "X"}).rsplit("/X", 1)[0] if tracking_url({"share_token": "X"}) else None,
     }
+
+
+COMMISSION_TYPES = ["partner_commission", "referral_l1", "referral_l2"]
+
+
+async def _commission_lines(user_id: str, month: Optional[str]):
+    q = {"user_id": user_id, "type": {"$in": COMMISSION_TYPES}}
+    if month:
+        from reports import month_bounds
+        start, end = month_bounds(month)
+        q["created_at"] = {"$gte": start, "$lt": end}
+    return [t async for t in db.wallet_tx.find(q, {"_id": 0}).sort("created_at", -1).limit(500)]
+
+
+@router.get("/commissions")
+async def commissions(month: Optional[str] = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(company_only)):
+    from reports import month_label
+    from routes.referral import PARTNER_RATE
+    lines = await _commission_lines(user["id"], month)
+    direct = round(sum(l["amount"] for l in lines if l["type"] == "partner_commission"), 2)
+    network = round(sum(l["amount"] for l in lines if l["type"] in ("referral_l1", "referral_l2")), 2)
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
+    payouts = [t async for t in db.wallet_tx.find({"user_id": user["id"], "type": "payout"}, {"_id": 0}).sort("created_at", -1).limit(50)]
+    return {
+        "month": month, "label": month_label(month) if month else "Toutes périodes",
+        "rate": PARTNER_RATE, "balance": round((fresh or {}).get("wallet_balance", 0) or 0, 2),
+        "earned": round(direct + network, 2), "direct": direct, "network": network, "count": len(lines),
+        "lines": lines, "payouts": payouts,
+    }
+
+
+@router.get("/commissions/export.pdf")
+async def commissions_pdf(month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(company_only)):
+    from reports import build_commission_pdf, month_label
+    lines = await _commission_lines(user["id"], month)
+    direct = round(sum(l["amount"] for l in lines if l["type"] == "partner_commission"), 2)
+    network = round(sum(l["amount"] for l in lines if l["type"] in ("referral_l1", "referral_l2")), 2)
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
+    totals = {"earned": round(direct + network, 2), "direct": direct, "network": network, "count": len(lines),
+              "balance": round((fresh or {}).get("wallet_balance", 0) or 0, 2)}
+    pdf = build_commission_pdf(f"Relevé de commissions — {user.get('company_name')}", f"Période : {month_label(month)}", lines, totals)
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="commissions-{month}.pdf"'})
+
+
+MIN_PAYOUT = 10.0
+
+
+@router.post("/wallet/payout")
+async def request_payout(data: PayoutIn, user=Depends(company_only)):
+    from routes.referral import credit_wallet
+    from core import notify, MODERATOR_EMAILS
+    amount = round(data.amount, 2)
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
+    balance = round((fresh or {}).get("wallet_balance", 0) or 0, 2)
+    if amount < MIN_PAYOUT:
+        raise HTTPException(422, f"Montant minimum de versement : {MIN_PAYOUT:.0f} €")
+    if amount > balance + 1e-6:
+        raise HTTPException(400, f"Solde insuffisant : {balance:.2f} € disponibles")
+    await credit_wallet(user["id"], -amount, "payout", f"Versement demandé · {user.get('company_name')}")
+    async for mod in db.users.find({"email": {"$in": list(MODERATOR_EMAILS)}}, {"_id": 0, "id": 1}):
+        await notify(mod["id"], "wallet", "Demande de versement", f"{user.get('company_name')} demande un versement de {amount:.2f} €")
+    return {"ok": True, "amount": amount, "balance": round(balance - amount, 2)}

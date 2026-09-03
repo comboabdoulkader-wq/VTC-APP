@@ -12,6 +12,15 @@ router = APIRouter(tags=["wallet"])
 PLATFORM_FEE_RATE = 0.20        # informational share kept by the platform on each ride
 REFERRAL_RATE = {"driver": 0.05, "passenger": 0.03, "company": 0.03}  # level-1 sponsor share of the ride price, by sponsor role
 LEVEL2_RATE = 0.03              # level-2 sponsor gets 3 % of the level-1 commission
+PARTNER_RATE = 0.05             # hotels / concierges / agencies earn 5 % on their clients' rides (like drivers)
+PARTNER_TYPES = {"hotel", "concierge", "agency"}
+
+
+def sponsor_rate(sponsor: dict) -> float:
+    """Level-1 commission rate for a sponsor. Partners (hotels/concierges/agencies) get the partner rate."""
+    if sponsor.get("role") == "company" and sponsor.get("partner_type") in PARTNER_TYPES:
+        return PARTNER_RATE
+    return REFERRAL_RATE.get(sponsor.get("role"), 0.03)
 
 
 class ApplyCodeIn(BaseModel):
@@ -40,22 +49,44 @@ async def credit_wallet(user_id: Optional[str], amount: float, type_: str, label
 
 async def distribute_referral(ride: dict):
     """Called once when a ride is completed: level-1 and level-2 sponsors of the passenger earn wallet credit."""
-    if ride.get("source") == "private" or not ride.get("passenger_id") or ride.get("referral_paid"):
+    if ride.get("source") == "private" or not ride.get("passenger_id") or ride.get("referral_paid") or ride.get("partner_booking"):
         return
     passenger = await db.users.find_one({"id": ride["passenger_id"]}, {"_id": 0, "sponsor_id": 1, "full_name": 1})
     if not passenger or not passenger.get("sponsor_id"):
         return
-    l1 = await db.users.find_one({"id": passenger["sponsor_id"]}, {"_id": 0, "id": 1, "role": 1, "sponsor_id": 1, "full_name": 1})
+    l1 = await db.users.find_one({"id": passenger["sponsor_id"]}, {"_id": 0, "id": 1, "role": 1, "partner_type": 1, "sponsor_id": 1, "full_name": 1})
     if not l1:
         return
     price = ride.get("price", 0)
-    c1 = round(price * REFERRAL_RATE.get(l1["role"], 0.03), 2)
+    c1 = round(price * sponsor_rate(l1), 2)
     await credit_wallet(l1["id"], c1, "referral_l1", f"Commission parrainage · course de {passenger['full_name']}", ride["id"])
     await notify(l1["id"], "wallet", "Portefeuille crédité", f"+{c1:.2f} € grâce à la course de {passenger['full_name']}", ride["id"])
     if l1.get("sponsor_id"):
         c2 = round(c1 * LEVEL2_RATE, 2)
         await credit_wallet(l1["sponsor_id"], c2, "referral_l2", f"Commission réseau niveau 2 · via {l1['full_name']}", ride["id"])
     await db.rides.update_one({"id": ride["id"]}, {"$set": {"referral_paid": True, "platform_fee": round(price * PLATFORM_FEE_RATE, 2), "referral_l1_amount": c1}})
+
+
+async def distribute_partner_commission(ride: dict):
+    """Partner booking (hotel/concierge/agency) completed → the partner earns 5 % of the ride, credited to its wallet.
+    Cascades level-2 to the partner's own sponsor, exactly like the referral network."""
+    if not ride.get("partner_booking") or not ride.get("company_id") or ride.get("partner_commission_paid"):
+        return
+    partner = await db.users.find_one({"id": ride["company_id"]}, {"_id": 0, "id": 1, "sponsor_id": 1, "company_name": 1})
+    if not partner:
+        return
+    price = ride.get("price", 0)
+    guest = ride.get("guest_name") or ride.get("passenger_label") or "un client"
+    c1 = round(price * PARTNER_RATE, 2)
+    await credit_wallet(partner["id"], c1, "partner_commission", f"Commission client · course de {guest}", ride["id"])
+    await notify(partner["id"], "wallet", "Portefeuille crédité", f"+{c1:.2f} € de commission sur la course de {guest}", ride["id"])
+    if partner.get("sponsor_id"):
+        c2 = round(c1 * LEVEL2_RATE, 2)
+        await credit_wallet(partner["sponsor_id"], c2, "referral_l2", f"Commission réseau niveau 2 · via {partner.get('company_name') or 'partenaire'}", ride["id"])
+    await db.rides.update_one({"id": ride["id"]}, {"$set": {
+        "partner_commission_paid": True, "partner_commission_rate": PARTNER_RATE, "partner_commission_amount": c1,
+        "platform_fee": round(price * PLATFORM_FEE_RATE, 2),
+    }})
 
 
 @router.get("/wallet")

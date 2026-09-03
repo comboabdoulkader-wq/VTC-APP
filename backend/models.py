@@ -390,6 +390,10 @@ class EmployeeOut(UserOut):
     rides_count: int = 0
 
 
+class PayoutIn(BaseModel):
+    amount: float = Field(gt=0)
+
+
 # ---- Cities (moderation) ----
 class CityIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)

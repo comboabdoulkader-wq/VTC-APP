@@ -59,6 +59,11 @@ async def register(data: RegisterIn, request: Request):
         if not sponsor:
             raise HTTPException(404, "Code de parrainage invalide")
         user["sponsor_id"] = sponsor["id"]
+    if phone and not user.get("sponsor_id"):
+        # If a partner (hotel/concierge) previously booked a ride for this number, link them as sponsor.
+        lead = await db.partner_leads.find_one({"phone": phone}, {"_id": 0, "sponsor_id": 1})
+        if lead and lead.get("sponsor_id"):
+            user["sponsor_id"] = lead["sponsor_id"]
     if data.role == "driver":
         user["docs_blocked"] = True  # no documents yet → cannot work until mandatory documents are uploaded
     if data.role == "company":

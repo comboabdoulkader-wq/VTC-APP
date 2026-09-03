@@ -10,6 +10,7 @@ import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
 import PromosManager from "@/src/components/PromosManager";
+import PartnerCommissions from "@/src/components/company/PartnerCommissions";
 import WalletCard from "@/src/components/WalletCard";
 import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
 import AccountSection from "@/src/components/AccountSection";
@@ -23,6 +24,7 @@ export default function CompanyProfile() {
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
+  const [showCommissions, setShowCommissions] = useState(false);
 
   if (!user) return null;
   return (
@@ -46,6 +48,12 @@ export default function CompanyProfile() {
       </View>
 
       <WalletCard />
+      <Pressable testID="open-commissions" onPress={() => setShowCommissions(true)} style={styles.menu}>
+        <Icon name="cash-multiple" size={22} color={theme.color.onSurface} />
+        <Text style={styles.menuLabel}>Commissions & versements</Text>
+        <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+      </Pressable>
+      <PartnerCommissions visible={showCommissions} onClose={() => setShowCommissions(false)} />
       <PhoneVerifyCard />
       <LanguagePicker />
       <AccountSection />
