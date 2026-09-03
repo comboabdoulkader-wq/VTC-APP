@@ -11,6 +11,7 @@ import push
 from catalog import seed_fixed_routes
 from flights import refresh_ride_flights
 from routes import auth, booking, company, documents, driver, extras, geo_routes, integrations, notifications, passenger_extras, payments, referral, rides, team
+from routes import adminpanel
 from routes.documents import compliance_sweep
 from storage import init_storage
 
@@ -30,6 +31,7 @@ for r in (auth.router, rides.router, driver.router, team.router, payments.router
 api.include_router(push.router)
 api.include_router(booking.router)
 api.include_router(integrations.router)
+api.include_router(adminpanel.router)
 
 app.include_router(api)
 

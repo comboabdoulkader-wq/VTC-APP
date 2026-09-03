@@ -11,6 +11,8 @@ import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
 import PayoutsAdmin from "@/src/components/admin/PayoutsAdmin";
 import ApiManager from "@/src/components/admin/ApiManager";
+import AdminDashboard from "@/src/components/admin/AdminDashboard";
+import CommissionSettings from "@/src/components/admin/CommissionSettings";
 import PromosManager from "@/src/components/PromosManager";
 import CompanyJoinCard from "@/src/components/CompanyJoinCard";
 import WalletCard from "@/src/components/WalletCard";
@@ -29,6 +31,8 @@ export default function Profile() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPayouts, setShowPayouts] = useState(false);
   const [showApi, setShowApi] = useState(false);
+  const [showDash, setShowDash] = useState(false);
+  const [showComm, setShowComm] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
 
   const doLogout = async () => {
@@ -106,6 +110,22 @@ export default function Profile() {
         </Pressable>
       )}
       <ApiManager visible={showApi} onClose={() => setShowApi(false)} />
+      {user.is_moderator && (
+        <>
+          <Pressable testID="open-admin-dashboard" onPress={() => setShowDash(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+            <Icon name="view-dashboard-outline" size={22} color={theme.color.onSurface} />
+            <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Tableau de bord</Text>
+            <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+          </Pressable>
+          <Pressable testID="open-commission-settings" onPress={() => setShowComm(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+            <Icon name="percent-outline" size={22} color={theme.color.onSurface} />
+            <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Commissions & Cashback</Text>
+            <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+          </Pressable>
+        </>
+      )}
+      <AdminDashboard visible={showDash} onClose={() => setShowDash(false)} />
+      <CommissionSettings visible={showComm} onClose={() => setShowComm(false)} />
       {user.is_moderator && (
         <Pressable testID="open-cities-moderation" onPress={() => setShowCities(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
           <Icon name="city-variant-outline" size={22} color={theme.color.onSurface} />

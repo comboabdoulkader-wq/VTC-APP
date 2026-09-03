@@ -11,6 +11,8 @@ import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
 import PayoutsAdmin from "@/src/components/admin/PayoutsAdmin";
 import ApiManager from "@/src/components/admin/ApiManager";
+import AdminDashboard from "@/src/components/admin/AdminDashboard";
+import CommissionSettings from "@/src/components/admin/CommissionSettings";
 import PromosManager from "@/src/components/PromosManager";
 import PartnerCommissions from "@/src/components/company/PartnerCommissions";
 import WalletCard from "@/src/components/WalletCard";
@@ -27,6 +29,8 @@ export default function CompanyProfile() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPayouts, setShowPayouts] = useState(false);
   const [showApi, setShowApi] = useState(false);
+  const [showDash, setShowDash] = useState(false);
+  const [showComm, setShowComm] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
 
@@ -84,6 +88,22 @@ export default function CompanyProfile() {
         </Pressable>
       )}
       <ApiManager visible={showApi} onClose={() => setShowApi(false)} />
+      {user.is_moderator && (
+        <>
+          <Pressable testID="open-admin-dashboard" onPress={() => setShowDash(true)} style={styles.menu}>
+            <Icon name="view-dashboard-outline" size={22} color={theme.color.onSurface} />
+            <Text style={styles.menuLabel}>Tableau de bord</Text>
+            <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+          </Pressable>
+          <Pressable testID="open-commission-settings" onPress={() => setShowComm(true)} style={styles.menu}>
+            <Icon name="percent-outline" size={22} color={theme.color.onSurface} />
+            <Text style={styles.menuLabel}>Commissions & Cashback</Text>
+            <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+          </Pressable>
+        </>
+      )}
+      <AdminDashboard visible={showDash} onClose={() => setShowDash(false)} />
+      <CommissionSettings visible={showComm} onClose={() => setShowComm(false)} />
       {user.is_moderator && (
         <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={styles.menu}>
           <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />

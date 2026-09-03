@@ -459,6 +459,9 @@ async def complete_ride(ride_id: str, user=Depends(require_role("driver"))):
         await distribute_partner_commission(r)
     else:
         await distribute_referral(r)
+    from routes.adminpanel import apply_cashback
+    r["price"] = final_price
+    await apply_cashback(r)
     await notify(r.get("passenger_id"), "completed", "Course terminée",
                  f"Merci d'avoir voyagé avec {user['full_name']}. Notez votre chauffeur !", ride_id, sms=True)
     await send_ride_receipt(r)  # cash / wallet-paid rides: receipt right away (card rides: after payment)
