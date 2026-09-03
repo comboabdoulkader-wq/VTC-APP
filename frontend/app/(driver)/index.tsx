@@ -269,10 +269,10 @@ export default function DriverHome() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surface },
   topBar: { position: "absolute", left: theme.spacing.lg, right: theme.spacing.lg, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  goBtn: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surface, paddingHorizontal: theme.spacing.lg, height: 44, borderRadius: theme.radius.pill, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  goBtn: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surface, paddingHorizontal: theme.spacing.lg, height: 44, borderRadius: theme.radius.pill, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
   goBtnOnline: { backgroundColor: theme.color.success },
   goText: { fontSize: 14, fontWeight: "800", color: theme.color.onSurface },
-  gpsChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: theme.color.surface, paddingHorizontal: theme.spacing.md, height: 36, borderRadius: theme.radius.pill, elevation: 2 },
+  gpsChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: theme.color.surface, paddingHorizontal: theme.spacing.md, height: 36, borderRadius: theme.radius.pill, boxShadow: "0 1px 6px rgba(0,0,0,0.12)" },
   gpsChipOn: { backgroundColor: theme.color.brand },
   gpsText: { fontSize: 12, fontWeight: "700", color: theme.color.onSurfaceSecondary },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, top: "42%", backgroundColor: theme.color.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.md },

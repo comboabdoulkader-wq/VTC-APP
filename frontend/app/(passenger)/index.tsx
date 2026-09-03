@@ -336,7 +336,7 @@ export default function PassengerHome() {
         footer={<Pressable testID="fav-submit" onPress={saveFavorite} style={styles.confirmBtn}><Text style={styles.confirmText}>Enregistrer</Text></Pressable>}>
         <View style={{ flexDirection: "row", gap: theme.spacing.sm, flexWrap: "wrap" }}>
           {["Maison", "Travail", "Autre"].map((l) => (
-            <Pressable key={l} testID={`fav-label-${l}`} onPress={() => setFavLabel(l)} style={[styles.locChip, { shadowOpacity: 0, elevation: 0, backgroundColor: favLabel === l ? theme.color.brand : theme.color.surfaceSecondary }]}>
+            <Pressable key={l} testID={`fav-label-${l}`} onPress={() => setFavLabel(l)} style={[styles.locChip, { boxShadow: "none", backgroundColor: favLabel === l ? theme.color.brand : theme.color.surfaceSecondary }]}>
               <Icon name={l === "Maison" ? "home" : l === "Travail" ? "briefcase" : "star"} size={16} color={favLabel === l ? "#fff" : theme.color.onSurface} />
               <Text style={[styles.locChipText, favLabel === l && { color: "#fff" }]}>{l}</Text>
             </Pressable>
@@ -352,9 +352,9 @@ export default function PassengerHome() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surface },
   topBar: { position: "absolute", left: theme.spacing.lg, right: theme.spacing.lg, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  locChip: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surface, paddingHorizontal: theme.spacing.md, height: 40, borderRadius: theme.radius.pill, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3, maxWidth: "75%" },
+  locChip: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surface, paddingHorizontal: theme.spacing.md, height: 40, borderRadius: theme.radius.pill, boxShadow: "0 2px 8px rgba(0,0,0,0.1)", maxWidth: "75%" },
   locChipText: { color: theme.color.onSurface, fontWeight: "600", fontSize: 13, flexShrink: 1 },
-  cartChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: theme.color.brand, paddingHorizontal: theme.spacing.md, height: 40, borderRadius: theme.radius.pill, elevation: 3 },
+  cartChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: theme.color.brand, paddingHorizontal: theme.spacing.md, height: 40, borderRadius: theme.radius.pill, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
   cartChipText: { color: "#fff", fontWeight: "800", fontSize: 14 },
   activeBanner: { position: "absolute", left: theme.spacing.lg, right: theme.spacing.lg, backgroundColor: theme.color.success, flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.md, borderRadius: theme.radius.md },
   activeBannerText: { color: "#fff", fontWeight: "700", flex: 1 },

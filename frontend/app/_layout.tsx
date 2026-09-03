@@ -13,7 +13,7 @@ import { theme } from "@/src/theme";
 LogBox.ignoreAllLogs(true);
 
 // Keep native splash visible until icon fonts register.
-// Required so @expo/vector-icons doesn't fetch broken vendor paths on Android Expo Go.
+// Required so icon glyphs are available on first render (Expo Go loads the font from a CDN).
 SplashScreen.preventAutoHideAsync();
 
 /** On wide screens (web desktop / large tablets) the app is centred in a phone-width column instead of stretching edge to edge. */

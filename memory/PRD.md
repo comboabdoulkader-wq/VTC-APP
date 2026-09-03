@@ -89,3 +89,10 @@ See /app/memory/test_credentials.md
 - Wallet UI: WalletCard in passenger/driver/company profiles; "Utiliser mon crédit" toggle in RideOptions (`use_wallet`), breakdown shows wallet part + "Reste à payer"; ride detail shows wallet row and card button charges `due_amount`
 - Security: login rate limit (8 / 15 min per account, 30 / 15 min per IP), register 10/h per IP, OTP + password change limits, password ≥ 8 chars, JWT_SECRET in backend/.env, security headers middleware, CORS without credentials, input length limits
 - UX: password visibility toggle (login/register), functional profile menu (AccountSection → AccountSettings sheet), wide-screen frame (≥ 820 px → centred 480 px column)
+
+## Iteration 11 – Expo SDK 57 upgrade
+- `yarn expo install expo@^57.0.0 --fix` → expo 57.0.19, RN 0.86.3, React 19.2.3, expo-router 57, reanimated 4.5.1, worklets 0.10.1, gesture-handler 2.32, screens 4.26, safe-area 5.7, maps 1.27.2, webview 13.16.1, TS 6.0, eslint-config-expo 57
+- Removed `@expo/vector-icons` (deprecated); `use-icon-fonts.ts` now preloads the scoped MaterialDesignIcons font (CDN) under Expo Go only
+- app.json: removed `newArchEnabled` and `android.edgeToEdgeEnabled` (defaults in SDK 57 schema). expo-doctor 21/21 OK, tsc OK
+- Replaced deprecated `shadow*`/`elevation` styles by `boxShadow`; `pointerEvents` prop → style
+- Frontend regression smoke test PASS (iteration_9 report)

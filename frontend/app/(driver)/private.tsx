@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: theme.color.onSurfaceTertiary, fontWeight: "600", marginTop: 2 },
   segment: { flexDirection: "row", marginHorizontal: theme.spacing.xl, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.pill, padding: 4 },
   segBtn: { flex: 1, height: 36, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center" },
-  segBtnActive: { backgroundColor: theme.color.surface, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 4, elevation: 1 },
+  segBtnActive: { backgroundColor: theme.color.surface, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" },
   segText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurfaceSecondary },
   segTextActive: { color: theme.color.onSurface },
   empty: { alignItems: "center", paddingVertical: 50, gap: theme.spacing.md },

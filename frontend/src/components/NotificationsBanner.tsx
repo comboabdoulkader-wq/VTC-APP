@@ -97,7 +97,7 @@ export default function NotificationsBanner({ role }: { role: "passenger" | "dri
 
 const styles = StyleSheet.create({
   wrap: { position: "absolute", left: theme.spacing.lg, right: theme.spacing.lg, zIndex: 100 },
-  banner: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, backgroundColor: theme.color.surface, padding: theme.spacing.md, borderRadius: theme.radius.lg, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 8, borderWidth: 1, borderColor: theme.color.border },
+  banner: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, backgroundColor: theme.color.surface, padding: theme.spacing.md, borderRadius: theme.radius.lg, boxShadow: "0 4px 14px rgba(0,0,0,0.18)", borderWidth: 1, borderColor: theme.color.border },
   bannerArriving: { backgroundColor: theme.color.success, borderColor: theme.color.success },
   iconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 14, fontWeight: "800", color: theme.color.onSurface },

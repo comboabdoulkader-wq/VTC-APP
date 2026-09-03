@@ -46,7 +46,7 @@ export default function MapCanvas({ markers = [] }: Props) {
           <Icon name={markerIcon(m.type) as any} size={16} color="#fff" />
         </View>
       ))}
-      <View style={styles.webCenter} pointerEvents="none">
+      <View style={[styles.webCenter, { pointerEvents: "none" }]}>
         <Text style={styles.webLabel}>Aperçu carte</Text>
       </View>
     </View>
@@ -55,7 +55,7 @@ export default function MapCanvas({ markers = [] }: Props) {
 
 const styles = StyleSheet.create({
   webMap: { flex: 1, backgroundColor: "#E8ECEF", overflow: "hidden" },
-  grid: { ...StyleSheet.absoluteFillObject, backgroundColor: "#DDE3E7", opacity: 0.5 },
+  grid: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#DDE3E7", opacity: 0.5 },
   street: { position: "absolute", backgroundColor: "#FFFFFF" },
   streetV: { position: "absolute", backgroundColor: "#FFFFFF" },
   webCenter: { position: "absolute", top: 8, left: 0, right: 0, alignItems: "center" },
@@ -69,10 +69,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "#fff",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
   },
 });
