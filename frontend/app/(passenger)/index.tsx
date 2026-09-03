@@ -7,6 +7,7 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import { useI18n } from "@/src/i18n";
+import { useResponsive } from "@/src/hooks/useResponsive";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { POPULAR_PLACES, DEFAULT_PICKUP, Place } from "@/src/data/places";
 import { apiFetch, useAuth } from "@/src/context/auth";
@@ -100,7 +101,9 @@ export default function PassengerHome() {
   // GPS position becomes the default pickup as soon as it is known
   useEffect(() => { if (gps.place && pickup.id !== "gps") setPickup(gps.place); }, [gps.place]);
 
-  const snapPoints = useMemo(() => ["30%", "62%", "92%"], []);
+  const { height: winH, isShort } = useResponsive();
+  // Absolute minimums keep the search field reachable on short/landscape screens (30 % of 390 px would be 117 px).
+  const snapPoints = useMemo(() => [Math.max(winH * 0.3, 230), Math.max(winH * 0.62, isShort ? winH - 80 : 420), winH * 0.92], [winH, isShort]);
 
   useEffect(() => {
     apiFetch<{ card_enabled: boolean }>("/payments/config").then((c) => setCardEnabled(c.card_enabled)).catch(() => {});
@@ -283,7 +286,7 @@ export default function PassengerHome() {
               <Text style={styles.secondaryText}>Ajouter une autre course</Text>
             </Pressable>
             <Pressable testID="cart-order-all" disabled={!cart.length || confirming} onPress={orderCart} style={[styles.confirmBtn, (!cart.length || confirming) && { opacity: 0.5 }]}>
-              {confirming ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Commander tout ({cart.length}) • {money(cartTotal)}</Text>}
+              {confirming ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>Commander tout ({cart.length}) • {money(cartTotal)}</Text>}
             </Pressable>
           </BottomSheetScrollView>
         ) : !dropoff || searchMode === "pickup" ? (
@@ -370,7 +373,7 @@ export default function PassengerHome() {
             <Pressable testID="confirm-ride-button" disabled={!selected || confirming} onPress={orderNow}
               style={({ pressed }) => [styles.confirmBtn, (!selected || confirming) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}>
               {confirming ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.confirmText}>
+                <Text style={styles.confirmText} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>
                   {options.scheduledAt ? t("schedule") : t("book")} {selected ? `• ${money(Math.max(Math.max(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0) - (options.promoCode ? options.discount : 0), 0) - (options.useWallet && !options.business ? walletBalance : 0), 0))}` : ""}
                 </Text>
               )}

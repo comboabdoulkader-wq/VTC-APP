@@ -3,7 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect } from "react";
-import { Alert, LogBox, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Alert, LogBox, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -13,6 +13,7 @@ import PushRegistrar from "@/src/components/PushRegistrar";
 import { I18nProvider } from "@/src/i18n";
 import { theme } from "@/src/theme";
 import { getNotifications } from "@/src/utils/push";
+import { FRAME_WIDTH, useResponsive } from "@/src/hooks/useResponsive";
 
 // Disable logbox errors so users see the app.
 LogBox.ignoreAllLogs(true);
@@ -43,14 +44,11 @@ if (Notifications) {
   }
 }
 
-/** On wide screens (web desktop / large tablets) the app is centred in a phone-width column instead of stretching edge to edge. */
-const WIDE_BREAKPOINT = 820;
-const FRAME_WIDTH = 480;
 
 export default function RootLayout() {
   const [loaded, error] = useIconFonts();
-  const { width } = useWindowDimensions();
-  const framed = width >= WIDE_BREAKPOINT;
+  // Tablets (≥ 600 px) and desktop: centred column so line lengths and reach stay phone-like.
+  const { framed } = useResponsive();
   const router = useRouter();
 
   useEffect(() => {

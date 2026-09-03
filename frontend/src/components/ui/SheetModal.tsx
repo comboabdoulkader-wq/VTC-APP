@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { FRAME_WIDTH } from "@/src/hooks/useResponsive";
 
 type Props = {
   visible: boolean;
@@ -21,6 +22,8 @@ export default function SheetModal({ visible, title, subtitle, onClose, children
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.root} testID={testID}>
+        {/* Tablet / desktop: the sheet content is a centred column (FRAME_WIDTH) instead of stretching edge to edge */}
+        <View style={styles.column}>
         <View style={[styles.header, { paddingTop: Platform.OS === "ios" ? theme.spacing.lg : insets.top + theme.spacing.md }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{title}</Text>
@@ -34,6 +37,7 @@ export default function SheetModal({ visible, title, subtitle, onClose, children
           {children}
         </ScrollView>
         {footer ? <View style={[styles.footer, { paddingBottom: insets.bottom + theme.spacing.md }]}>{footer}</View> : null}
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -41,6 +45,7 @@ export default function SheetModal({ visible, title, subtitle, onClose, children
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surface },
+  column: { flex: 1, width: "100%", maxWidth: FRAME_WIDTH, alignSelf: "center" },
   header: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.color.divider },
   title: { fontSize: 22, fontWeight: "800", color: theme.color.onSurface, letterSpacing: -0.5 },
   subtitle: { fontSize: 13, color: theme.color.onSurfaceSecondary, marginTop: 2 },

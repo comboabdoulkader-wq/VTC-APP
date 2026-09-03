@@ -50,7 +50,7 @@ export default function Earnings() {
 
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>Net chauffeur</Text>
-        <Text style={styles.heroValue}>{earnings.net.toFixed(2)} €</Text>
+        <Text style={styles.heroValue} maxFontSizeMultiplier={1.2} adjustsFontSizeToFit numberOfLines={1}>{earnings.net.toFixed(2)} €</Text>
         <Text style={styles.heroMeta}>{earnings.rides_count} course{earnings.rides_count > 1 ? "s" : ""} terminée{earnings.rides_count > 1 ? "s" : ""} · brut {earnings.total.toFixed(2)} €</Text>
       </View>
 

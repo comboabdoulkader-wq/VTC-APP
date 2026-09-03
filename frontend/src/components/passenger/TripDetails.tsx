@@ -48,7 +48,7 @@ export default function TripDetails({ value, onChange, service, flightTracking }
               autoCapitalize="characters"
               placeholder={t("flight_number")}
               placeholderTextColor={theme.color.onSurfaceTertiary}
-              style={[styles.input, { flex: 1 }]}
+              style={styles.input}
             />
             <SheetInput
               testID="airline"
@@ -56,7 +56,7 @@ export default function TripDetails({ value, onChange, service, flightTracking }
               onChangeText={(t: string) => set({ airline: t.slice(0, 40) })}
               placeholder={t("airline")}
               placeholderTextColor={theme.color.onSurfaceTertiary}
-              style={[styles.input, { flex: 1 }]}
+              style={styles.input}
             />
           </View>
           <Text style={styles.flightNote}>
@@ -95,7 +95,8 @@ const styles = StyleSheet.create({
   flightHead: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
   flightTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: theme.color.onSurface },
   flightHint: { fontSize: 11, fontWeight: "700", color: theme.color.onSurfaceTertiary, textTransform: "uppercase" },
-  flightRow: { flexDirection: "row", gap: theme.spacing.sm },
-  input: { backgroundColor: theme.color.surface, borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.md, height: 44, fontSize: 14, color: theme.color.onSurface, borderWidth: 1, borderColor: theme.color.border },
+  // Wraps to two lines on compact phones (< 360 px) instead of clipping the second field
+  flightRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  input: { flexGrow: 1, flexBasis: 140, minWidth: 0, backgroundColor: theme.color.surface, borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.md, height: 44, fontSize: 14, color: theme.color.onSurface, borderWidth: 1, borderColor: theme.color.border },
   flightNote: { fontSize: 12, color: theme.color.onSurfaceTertiary, marginTop: theme.spacing.sm, lineHeight: 16 },
 });

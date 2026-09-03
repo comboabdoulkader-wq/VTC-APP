@@ -27,7 +27,7 @@ export default function Welcome() {
           <Text style={styles.brand} testID="brand-title">RideGo</Text>
         </View>
         <View>
-          <Text style={styles.headline}>{t("welcome_title")}</Text>
+          <Text style={styles.headline} maxFontSizeMultiplier={1.2} adjustsFontSizeToFit numberOfLines={3}>{t("welcome_title")}</Text>
           <Text style={styles.subtitle}>{t("welcome_subtitle")}</Text>
 
           <Pressable

@@ -38,8 +38,8 @@ export default function RideSummary({ ride, compact }: { ride: any; compact?: bo
         <View style={styles.flight} testID="flight-card">
           <Icon name="airplane-landing" size={18} color={theme.color.onSurface} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.flightTitle}>Vol {f.number}{f.airline ? ` · ${f.airline}` : ""}</Text>
-            <Text style={styles.flightMeta}>
+            <Text style={styles.flightTitle} numberOfLines={1}>Vol {f.number}{f.airline ? ` · ${f.airline}` : ""}</Text>
+            <Text style={styles.flightMeta} numberOfLines={2}>
               {f.status
                 ? `${FLIGHT_STATUS[f.status] || f.status}${f.arrival_delay_min ? ` · retard ${f.arrival_delay_min} min` : f.status !== "cancelled" ? " · à l'heure" : ""}${fmtTime(f.arrival_estimated) ? ` · arrivée ${fmtTime(f.arrival_estimated)}` : ""}${f.arrival_terminal ? ` · T${f.arrival_terminal}` : ""}`
                 : compact ? "Suivi indisponible – saisie manuelle" : "Suivi de vol indisponible – le chauffeur est informé de votre vol"}

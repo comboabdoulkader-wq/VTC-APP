@@ -28,7 +28,7 @@ export default function VehicleCard({ option, active, hours, onPress }: { option
       </View>
       <View style={{ flex: 1 }}>
         <View style={styles.titleRow}>
-          <Text style={styles.name}>{option.label}</Text>
+          <Text style={styles.name} numberOfLines={1}>{option.label}</Text>
           {option.category ? <Text style={styles.category}>{option.category}</Text> : null}
         </View>
         <View style={styles.capRow}>
@@ -58,10 +58,10 @@ const styles = StyleSheet.create({
   card: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, padding: theme.spacing.md, borderRadius: theme.radius.md, borderWidth: 2, borderColor: theme.color.border, backgroundColor: theme.color.surface },
   cardActive: { borderColor: theme.color.brand, backgroundColor: theme.color.surfaceSecondary },
   cardDisabled: { opacity: 0.55 },
-  imageWrap: { width: 84, height: 56, borderRadius: theme.radius.sm, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  imageWrap: { width: 72, height: 50, borderRadius: theme.radius.sm, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   image: { width: "100%", height: "100%" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
-  name: { fontSize: 15, fontWeight: "800", color: theme.color.onSurface },
+  name: { fontSize: 15, fontWeight: "800", color: theme.color.onSurface, flexShrink: 1 },
   category: { fontSize: 10, fontWeight: "800", color: theme.color.onSurfaceTertiary, textTransform: "uppercase", letterSpacing: 0.5 },
   capRow: { flexDirection: "row", alignItems: "center", marginTop: 3, flexWrap: "wrap" },
   cap: { fontSize: 12, color: theme.color.onSurfaceSecondary, marginLeft: 2, fontWeight: "600" },

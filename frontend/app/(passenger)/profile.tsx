@@ -40,7 +40,7 @@ export default function Profile() {
       contentContainerStyle={{ paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom + theme.spacing.xxl, paddingHorizontal: theme.spacing.xl }}
       testID="profile-screen"
     >
-      <Text style={styles.title}>{t("profile")}</Text>
+      <Text style={styles.title} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit>{t("profile")}</Text>
 
       <View style={styles.card}>
         <View style={styles.avatar}>

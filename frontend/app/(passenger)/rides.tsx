@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   tags: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.sm, flexWrap: "wrap" },
   tag: { fontSize: 12, fontWeight: "600", color: theme.color.onSurfaceSecondary, backgroundColor: theme.color.surface, paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radius.pill },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.md },
-  date: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
+  date: { fontSize: 13, color: theme.color.onSurfaceSecondary, fontWeight: "600", flexShrink: 1, marginRight: theme.spacing.sm },
   badge: { paddingHorizontal: theme.spacing.sm, paddingVertical: 4, borderRadius: theme.radius.pill },
   badgeText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   route: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginBottom: 6 },
