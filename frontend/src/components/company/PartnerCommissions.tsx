@@ -13,6 +13,7 @@ const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "aoû
 
 type Line = { id: string; type: string; label: string; amount: number; created_at: string };
 type Data = { month: string; label: string; rate: number; balance: number; earned: number; direct: number; network: number; count: number; lines: Line[]; payouts: Line[] };
+type Ranking = { rank: number; total_partners: number; commissioned_partners: number; my_total: number; leaderboard: { position: number; is_me: boolean; name: string; total: number; count: number }[]; best_months: { month: string; label: string; total: number; count: number }[] };
 
 const ORIGIN: Record<string, { label: string; icon: string }> = {
   partner_commission: { label: "Client direct", icon: "account-star-outline" },
@@ -32,6 +33,7 @@ export default function PartnerCommissions({ visible, onClose }: { visible: bool
   const [idx, setIdx] = useState(0);
   const month = months[idx];
   const [data, setData] = useState<Data | null>(null);
+  const [ranking, setRanking] = useState<Ranking | null>(null);
   const [loading, setLoading] = useState(false);
   const [payout, setPayout] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,6 +44,7 @@ export default function PartnerCommissions({ visible, onClose }: { visible: bool
     catch { setData(null); } finally { setLoading(false); }
   }, [month, token]);
   useEffect(() => { if (visible) load(); }, [visible, load]);
+  useEffect(() => { if (visible) apiFetch<Ranking>("/company/ranking", {}, token).then(setRanking).catch(() => setRanking(null)); }, [visible, token]);
 
   const label = (m: string) => { const [y, mm] = m.split("-"); return `${MONTHS[Number(mm) - 1]} ${y.slice(2)}`; };
 
@@ -76,6 +79,24 @@ export default function PartnerCommissions({ visible, onClose }: { visible: bool
         <Text style={styles.heroHint}>Vous gagnez {Math.round((data?.rate ?? 0.05) * 100)} % sur chaque course de vos clients, crédités ici automatiquement.</Text>
       </View>
 
+      {ranking && ranking.my_total > 0 && (
+        <View style={styles.rankCard} testID="comm-ranking">
+          <View style={styles.rankRow}>
+            <Icon name="trophy-variant-outline" size={22} color="#E8B84B" />
+            <Text style={styles.rankTitle}>Classement partenaires</Text>
+          </View>
+          <Text style={styles.rankBig}>#{ranking.rank}<Text style={styles.rankSmall}> / {ranking.commissioned_partners}</Text></Text>
+          <Text style={styles.rankHint}>{ranking.my_total.toFixed(2)} € de commissions cumulées{ranking.rank === 1 ? " · vous êtes en tête 🎉" : " · continuez à réserver pour grimper"}</Text>
+          {ranking.best_months.length > 0 && (
+            <View style={styles.bestRow}>
+              {ranking.best_months.map((b) => (
+                <View key={b.month} style={styles.bestPill}><Text style={styles.bestLabel}>{b.label}</Text><Text style={styles.bestVal}>{money(b.total)}</Text></View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
       {loading ? <ActivityIndicator style={{ marginVertical: 24 }} color={theme.color.onSurface} /> : (
         <>
           <View style={styles.totals}>
@@ -89,6 +110,7 @@ export default function PartnerCommissions({ visible, onClose }: { visible: bool
             <Pressable testID="payout-btn" onPress={requestPayout} disabled={busy} style={[styles.payBtn, busy && { opacity: 0.5 }]}>{busy ? <ActivityIndicator color={theme.color.onBrand} /> : <Text style={styles.payBtnText}>Demander</Text>}</Pressable>
           </View>
           <Pressable testID="comm-pdf" onPress={downloadPdf} style={styles.pdf}><Icon name="file-pdf-box" size={18} color={theme.color.onSurface} /><Text style={styles.pdfText}>Télécharger le relevé PDF</Text></Pressable>
+          <Text style={styles.autoNote}>📧 Votre relevé est aussi envoyé automatiquement par email chaque début de mois.</Text>
 
           <Text style={styles.section}>Détail ({data?.count ?? 0})</Text>
           {data && data.lines.length > 0 ? data.lines.map((l) => {
@@ -137,6 +159,15 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 12, color: "rgba(255,255,255,0.7)" },
   heroValue: { fontSize: 34, fontWeight: "800", color: "#fff", letterSpacing: -1, marginTop: 2 },
   heroHint: { fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 17 },
+  rankCard: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.lg, marginBottom: theme.spacing.lg, borderWidth: 1, borderColor: "#E8B84B33" },
+  rankRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  rankTitle: { fontSize: 14, fontWeight: "800", color: theme.color.onSurface },
+  rankBig: { fontSize: 30, fontWeight: "800", color: theme.color.onSurface, marginTop: 4 }, rankSmall: { fontSize: 16, fontWeight: "700", color: theme.color.onSurfaceTertiary },
+  rankHint: { fontSize: 12, color: theme.color.onSurfaceSecondary, marginTop: 2 },
+  bestRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.md },
+  bestPill: { backgroundColor: theme.color.surface, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: 6 },
+  bestLabel: { fontSize: 11, color: theme.color.onSurfaceTertiary }, bestVal: { fontSize: 14, fontWeight: "800", color: theme.color.success },
+  autoNote: { fontSize: 12, color: theme.color.onSurfaceTertiary, marginBottom: theme.spacing.lg, lineHeight: 16 },
   totals: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
   stat: { flexGrow: 1, flexBasis: 100, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.md },
   statLabel: { fontSize: 11, color: theme.color.onSurfaceTertiary }, statValue: { fontSize: 16, fontWeight: "800", color: theme.color.onSurface, marginTop: 4 },

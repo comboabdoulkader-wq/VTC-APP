@@ -394,6 +394,11 @@ class PayoutIn(BaseModel):
     amount: float = Field(gt=0)
 
 
+class PayoutDecisionIn(BaseModel):
+    status: Literal["paid", "rejected"]
+    note: Optional[str] = Field(default=None, max_length=300)
+
+
 # ---- Cities (moderation) ----
 class CityIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)

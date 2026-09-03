@@ -1,12 +1,15 @@
 """Business accounts: a company invites employees and controls their ride budgets."""
+import hashlib
+import hmac
+import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
-from core import current_user, db, now_utc, require_role
-from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, PayoutIn, RideOut
+from core import current_user, db, new_id, now_utc, require_role
+from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, PayoutIn, PayoutDecisionIn, RideOut
 from reports import build_csv, build_pdf, group_rides, month_label, rides_for
 from serializers import ride_to_out, user_to_out
 
@@ -234,7 +237,7 @@ async def commissions(month: Optional[str] = Query(default=None, pattern=r"^\d{4
     direct = round(sum(l["amount"] for l in lines if l["type"] == "partner_commission"), 2)
     network = round(sum(l["amount"] for l in lines if l["type"] in ("referral_l1", "referral_l2")), 2)
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
-    payouts = [t async for t in db.wallet_tx.find({"user_id": user["id"], "type": "payout"}, {"_id": 0}).sort("created_at", -1).limit(50)]
+    payouts = [p async for p in db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50)]
     return {
         "month": month, "label": month_label(month) if month else "Toutes périodes",
         "rate": PARTNER_RATE, "balance": round((fresh or {}).get("wallet_balance", 0) or 0, 2),
@@ -270,7 +273,127 @@ async def request_payout(data: PayoutIn, user=Depends(company_only)):
         raise HTTPException(422, f"Montant minimum de versement : {MIN_PAYOUT:.0f} €")
     if amount > balance + 1e-6:
         raise HTTPException(400, f"Solde insuffisant : {balance:.2f} € disponibles")
+    # Debit (hold) the wallet now; the amount is released to the partner once an admin marks the payout as paid.
     await credit_wallet(user["id"], -amount, "payout", f"Versement demandé · {user.get('company_name')}")
+    payout = {"id": new_id(), "user_id": user["id"], "partner_name": user.get("company_name"),
+              "amount": amount, "status": "pending", "note": None, "created_at": now_utc(),
+              "settled_at": None, "settled_by": None}
+    await db.payouts.insert_one(payout.copy())
     async for mod in db.users.find({"email": {"$in": list(MODERATOR_EMAILS)}}, {"_id": 0, "id": 1}):
         await notify(mod["id"], "wallet", "Demande de versement", f"{user.get('company_name')} demande un versement de {amount:.2f} €")
     return {"ok": True, "amount": amount, "balance": round(balance - amount, 2)}
+
+
+# ---------- Ranking (gamification for partners) ----------
+@router.get("/ranking")
+async def partner_ranking(user=Depends(company_only)):
+    from reports import month_label
+    partners = {}
+    async for p in db.users.find({"role": "company"}, {"_id": 0, "id": 1, "company_name": 1}):
+        partners[p["id"]] = p.get("company_name") or "Partenaire"
+    totals = {}
+    async for row in db.wallet_tx.aggregate([{"$match": {"type": "partner_commission"}}, {"$group": {"_id": "$user_id", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}]):
+        if row["_id"] in partners:
+            totals[row["_id"]] = {"total": round(row["total"], 2), "count": row["count"]}
+    board = sorted(totals.items(), key=lambda kv: -kv[1]["total"])
+    rank = next((i + 1 for i, (uid, _) in enumerate(board) if uid == user["id"]), len(board) + 1)
+    my_total = totals.get(user["id"], {}).get("total", 0.0)
+    leaderboard = [{
+        "position": i + 1, "is_me": uid == user["id"],
+        "name": "Vous" if uid == user["id"] else (partners[uid][:1] + "•••" if partners.get(uid) else "Partenaire"),
+        "total": v["total"], "count": v["count"],
+    } for i, (uid, v) in enumerate(board[:5])]
+    best = []
+    async for row in db.wallet_tx.aggregate([
+        {"$match": {"user_id": user["id"], "type": "partner_commission"}},
+        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m", "date": "$created_at"}}, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}}, {"$limit": 3},
+    ]):
+        best.append({"month": row["_id"], "label": month_label(row["_id"]), "total": round(row["total"], 2), "count": row["count"]})
+    return {"rank": rank, "total_partners": len(partners), "commissioned_partners": len(board),
+            "my_total": my_total, "leaderboard": leaderboard, "best_months": best}
+
+
+# ---------- Admin: manage partner payout requests (moderators) ----------
+def moderator_only(user=Depends(current_user)):
+    if not user.get("is_moderator"):
+        raise HTTPException(403, "Réservé aux administrateurs")
+    return user
+
+
+@router.get("/admin/payouts")
+async def admin_payouts(status: Optional[str] = None, user=Depends(moderator_only)):
+    q = {}
+    if status in ("pending", "paid", "rejected"):
+        q["status"] = status
+    items = [p async for p in db.payouts.find(q, {"_id": 0}).sort("created_at", -1).limit(300)]
+    pending_total = round(sum(p["amount"] for p in items if p["status"] == "pending"), 2)
+    return {"payouts": items, "pending_count": sum(1 for p in items if p["status"] == "pending"), "pending_total": pending_total}
+
+
+@router.patch("/admin/payouts/{payout_id}")
+async def decide_payout(payout_id: str, data: PayoutDecisionIn, user=Depends(moderator_only)):
+    from routes.referral import credit_wallet
+    from core import notify
+    p = await db.payouts.find_one({"id": payout_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Demande introuvable")
+    if p["status"] != "pending":
+        raise HTTPException(409, "Cette demande a déjà été traitée")
+    upd = {"status": data.status, "note": (data.note or "").strip() or None, "settled_at": now_utc(), "settled_by": user.get("full_name") or user["email"]}
+    if data.status == "rejected":
+        # release the hold back to the partner's wallet
+        await credit_wallet(p["user_id"], p["amount"], "payout_refund", f"Versement refusé · retour au portefeuille")
+        await notify(p["user_id"], "wallet", "Versement refusé", f"Votre demande de {p['amount']:.2f} € a été refusée. Le montant est de nouveau disponible.")
+    else:
+        await notify(p["user_id"], "wallet", "Versement effectué", f"Votre versement de {p['amount']:.2f} € a été validé et réglé.")
+    await db.payouts.update_one({"id": payout_id}, {"$set": upd})
+    p.update(upd)
+    return p
+
+
+# ---------- Public signed commission statement PDF (used in the monthly email) ----------
+def statement_sig(user_id: str, month: str) -> str:
+    from core import JWT_SECRET
+    return hmac.new(JWT_SECRET.encode(), f"statement:{user_id}:{month}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+@router.get("/commission-statements/{user_id}.pdf")
+async def public_statement_pdf(user_id: str, month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), sig: str = ""):
+    from reports import build_commission_pdf, month_label
+    if not hmac.compare_digest(sig, statement_sig(user_id, month)):
+        raise HTTPException(403, "Lien invalide")
+    owner = await db.users.find_one({"id": user_id}, {"_id": 0, "company_name": 1, "wallet_balance": 1})
+    if not owner:
+        raise HTTPException(404, "Introuvable")
+    lines = await _commission_lines(user_id, month)
+    direct = round(sum(l["amount"] for l in lines if l["type"] == "partner_commission"), 2)
+    network = round(sum(l["amount"] for l in lines if l["type"] in ("referral_l1", "referral_l2")), 2)
+    totals = {"earned": round(direct + network, 2), "direct": direct, "network": network, "count": len(lines),
+              "balance": round(owner.get("wallet_balance", 0) or 0, 2)}
+    pdf = build_commission_pdf(f"Relevé de commissions — {owner.get('company_name')}", f"Période : {month_label(month)}", lines, totals)
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="commissions-{month}.pdf"'})
+
+
+# ---------- Monthly statement email sweep (called by a daily loop in server.py) ----------
+async def monthly_statement_sweep():
+    """Once, at the start of each month, email every partner the previous month's commission statement."""
+    from reports import month_label
+    from emailer import send_partner_statement
+    now = now_utc()
+    y, m = (now.year - 1, 12) if now.month == 1 else (now.year, now.month - 1)
+    prev_month = f"{y:04d}-{m:02d}"
+    frontend = os.environ.get("FRONTEND_URL", "").strip('"').rstrip("/")
+    async for u in db.users.find({"role": "company"}, {"_id": 0, "id": 1, "email": 1, "company_name": 1, "language": 1, "last_statement_month": 1}):
+        if u.get("last_statement_month") == prev_month or not u.get("email"):
+            continue
+        lines = await _commission_lines(u["id"], prev_month)
+        await db.users.update_one({"id": u["id"]}, {"$set": {"last_statement_month": prev_month}})  # mark even if empty (avoid re-scan)
+        if not lines:
+            continue
+        direct = round(sum(l["amount"] for l in lines if l["type"] == "partner_commission"), 2)
+        network = round(sum(l["amount"] for l in lines if l["type"] in ("referral_l1", "referral_l2")), 2)
+        totals = {"earned": round(direct + network, 2), "direct": direct, "network": network, "count": len(lines)}
+        pdf_url = f"{frontend}/api/company/commission-statements/{u['id']}.pdf?month={prev_month}&sig={statement_sig(u['id'], prev_month)}" if frontend.startswith("https://") else None
+        await send_partner_statement(to=u["email"], name=u.get("company_name") or "Partenaire", month_label=month_label(prev_month),
+                                      totals=totals, pdf_url=pdf_url, lang="fr" if u.get("language", "fr") == "fr" else "en")

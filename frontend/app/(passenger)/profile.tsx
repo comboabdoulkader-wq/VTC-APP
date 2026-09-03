@@ -9,6 +9,7 @@ import { useI18n } from "@/src/i18n";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
+import PayoutsAdmin from "@/src/components/admin/PayoutsAdmin";
 import PromosManager from "@/src/components/PromosManager";
 import CompanyJoinCard from "@/src/components/CompanyJoinCard";
 import WalletCard from "@/src/components/WalletCard";
@@ -25,6 +26,7 @@ export default function Profile() {
   const [showCatalog, setShowCatalog] = useState(false);
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPayouts, setShowPayouts] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
 
   const doLogout = async () => {
@@ -86,6 +88,14 @@ export default function Profile() {
         </Pressable>
       )}
       <DriversAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} />
+      {user.is_moderator && (
+        <Pressable testID="open-payouts-admin" onPress={() => setShowPayouts(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="bank-transfer" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Versements partenaires</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <PayoutsAdmin visible={showPayouts} onClose={() => setShowPayouts(false)} />
       {user.is_moderator && (
         <Pressable testID="open-cities-moderation" onPress={() => setShowCities(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
           <Icon name="city-variant-outline" size={22} color={theme.color.onSurface} />

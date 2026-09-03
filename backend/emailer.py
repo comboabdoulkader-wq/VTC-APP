@@ -177,6 +177,37 @@ def build_receipt_pdf(r: dict, lang: str = "fr") -> bytes:
     return buf.getvalue()
 
 
+async def send_partner_statement(*, to: str, name: str, month_label: str, totals: dict, pdf_url: str | None, lang: str = "fr") -> bool:
+    """Email a partner (hotel/concierge) their monthly commission statement. Never raises."""
+    try:
+        brand = escape(_from_name())
+        en = lang != "fr"
+        subject = (f"{brand} · Votre relevé de commissions — {month_label}" if not en else f"{brand} · Your commission statement — {month_label}")
+        hello = (f"Bonjour {escape(name)}, voici votre relevé de commissions pour {escape(month_label)}." if not en
+                 else f"Hello {escape(name)}, here is your commission statement for {escape(month_label)}.")
+        rows_data = [
+            (("Commissions du mois" if not en else "Commissions this month"), f"{totals.get('earned', 0):.2f} EUR"),
+            (("Clients directs" if not en else "Direct clients"), f"{totals.get('direct', 0):.2f} EUR"),
+            (("Reseau (filleuls)" if not en else "Network (referrals)"), f"{totals.get('network', 0):.2f} EUR"),
+            (("Nombre de commissions" if not en else "Number of commissions"), str(totals.get("count", 0))),
+        ]
+        rows = "".join(f'<tr><td style="padding:6px 8px;color:#666">{escape(k)}</td><td style="padding:6px 8px;font-weight:600">{escape(str(v))}</td></tr>' for k, v in rows_data)
+        link_txt = "Telecharger le releve PDF" if not en else "Download the PDF statement"
+        footer = (f"Envoye par {brand}. Les commissions sont creditees sur votre portefeuille et versees a votre demande."
+                  if not en else f"Sent by {brand}. Commissions are credited to your wallet and paid on request.")
+        html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#141414">'
+                f'<h2 style="margin:0 0 12px">{brand}</h2><p>{hello}</p>'
+                f'<table role="presentation" style="border-collapse:collapse;border:1px solid #eee;width:100%">{rows}</table>'
+                + (f'<p style="margin:20px 0"><a href="{pdf_url}" style="background:#141414;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none">{link_txt}</a></p>' if pdf_url and pdf_url.startswith("https://") else "")
+                + f'<p style="font-size:12px;color:#888">{footer}</p></td></tr></table>')
+        await send_email(to=to, subject=subject, html=html)
+        return True
+    except Exception as e:
+        logger.warning("Statement email failed (non-blocking): %s", e)
+        return False
+
+
+
 async def send_ride_receipt(ride: dict) -> bool:
     """Email the passenger an HTML receipt with a signed link to the PDF. Idempotent per ride. Never raises."""
     try:

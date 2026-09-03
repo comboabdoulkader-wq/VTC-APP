@@ -9,6 +9,7 @@ import { useI18n } from "@/src/i18n";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
+import PayoutsAdmin from "@/src/components/admin/PayoutsAdmin";
 import PromosManager from "@/src/components/PromosManager";
 import PartnerCommissions from "@/src/components/company/PartnerCommissions";
 import WalletCard from "@/src/components/WalletCard";
@@ -23,6 +24,7 @@ export default function CompanyProfile() {
   const { user, logout } = useAuth();
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPayouts, setShowPayouts] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
 
@@ -64,6 +66,14 @@ export default function CompanyProfile() {
         <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
       </Pressable>
       <PromosManager visible={showPromos} onClose={() => setShowPromos(false)} />
+      {user.is_moderator && (
+        <Pressable testID="open-payouts-admin" onPress={() => setShowPayouts(true)} style={styles.menu}>
+          <Icon name="bank-transfer" size={22} color={theme.color.onSurface} />
+          <Text style={styles.menuLabel}>Versements partenaires</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <PayoutsAdmin visible={showPayouts} onClose={() => setShowPayouts(false)} />
       {user.is_moderator && (
         <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={styles.menu}>
           <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />

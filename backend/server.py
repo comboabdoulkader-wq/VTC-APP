@@ -92,6 +92,17 @@ async def flights_loop():
             logging.getLogger("flights").warning("refresh error: %s", e)
 
 
+async def statements_loop():
+    """Once a day: at the start of a new month, email each partner the previous month's commission statement (idempotent)."""
+    from routes.company import monthly_statement_sweep
+    while True:
+        try:
+            await monthly_statement_sweep()
+        except Exception as e:
+            logging.getLogger("statements").warning("statement sweep error: %s", e)
+        await asyncio.sleep(6 * 3600)
+
+
 @app.on_event("startup")
 async def on_startup():
     await seed_cities()
@@ -100,6 +111,7 @@ async def on_startup():
     asyncio.create_task(reminder_loop())
     asyncio.create_task(compliance_loop())
     asyncio.create_task(flights_loop())
+    asyncio.create_task(statements_loop())
 
 
 @app.on_event("shutdown")
