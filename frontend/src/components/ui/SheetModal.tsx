@@ -21,9 +21,9 @@ export default function SheetModal({ visible, title, subtitle, onClose, children
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.root} testID={testID}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.root}>
         {/* Tablet / desktop: the sheet content is a centred column (FRAME_WIDTH) instead of stretching edge to edge */}
-        <View style={styles.column}>
+        <View style={styles.column} testID={testID}>
         <View style={[styles.header, { paddingTop: Platform.OS === "ios" ? theme.spacing.lg : insets.top + theme.spacing.md }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{title}</Text>

@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 16 - Responsive audit (frontend only). All 6 viewport scenarios PASS. 320x568: login form fits (scrollWidth=320, email w=272, pwd 232 + eye 48 side-by-side); after login → service-airport → place-4 → trip-details visible; flight-number and airline wrap onto TWO rows (both x=40, w=240, right=280<=320); vehicle cards render inside 272px card with 'B...' ellipsis on name and '75.00 €' price visible on the right; confirm-ride-button text 'Book a ride • 75.00 €' fits on one line (w=272). 390x844: regression OK, flight-number and airline side-by-side (each 151px, one row), rides list first card '2 sept., 22:23 · PENDING' with date+status on one row, scrollWidth=390, ride detail opens. 768x1024: passenger-home box x=104 w=560 (perfect centered column), pickup-chip x=120, sheet-close x=600 confirming inner column right edge at x=640 (=104+536); menu-info → account-settings opened (outer KAV spans 768 but inner column via sheet-close position confirms 560 centering); menu-legal → legal-sheet opens (screenshot confirms centered ~560 col); scrollWidth=768 (no h-scroll). 844x390 landscape: passenger-home framed at x=142 w=560, destination-search x=210 y=259 h=52 (y+h=311<390) fully visible and clickable in initial sheet state, scrollWidth=844. 1280x900 desktop: passenger-home x=360 w=560 (exact match to expected), scrollWidth==clientWidth==1280 (no horizontal scrollbar), grey frame background around centered column (verified visually via #ECECEC rootFramed style + screenshots). 320 profile: phone-card w=272, phone-verify-input right=280, phone-send-code right=280 (wrapped onto two rows y=244 vs y=300) — no clipping; wallet-card w=272 fits within 320. Zero console errors across all viewports.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "VehicleCard", "issue": "At 320 px vehicle name 'Berline' is truncated to 'B…' because the image is 72 px + gap + category chip + price consume space, leaving ~40 px for the name. Functionality is fine (numberOfLines=1 is intended) but for very small phones consider hiding the category chip or reducing image width when width<360 for readability. Reference: /app/frontend/src/components/passenger/VehicleCard.tsx", "testID": "vehicle-standard", "priority": "LOW"},
+      {"component": "WalletCard (rewards)", "issue": "At 320 px the 'Valider' button next to the referral-code input appears visually clipped in the screenshot (last ~15 px cut off inside the dark card). Not measured programmatically because there is no dedicated testID on the button; recommend adding testID and wrapping the referral input+button row with flexWrap:'wrap' like PhoneVerifyCard does. Reference: wallet-card at /app/frontend/src/components/… (add testID='wallet-referral-input' and 'wallet-referral-submit').", "testID": "wallet-card", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SheetModal (account-settings, legal-sheet)", "issues": ["testID is on the outer full-viewport KeyboardAvoidingView so its bounding box reports full width (768×1024). Inner column is correctly centred to 560 px (verified via sheet-close x=600 and screenshots). Consider moving testID to the inner <View style={styles.column}> so future automated width checks can assert 560 directly."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: hide vehicle-card category chip under 340 px width to leave more room for the vehicle name (currently ellipsized to a single letter on iPhone SE portrait).",
+    "Optional: add testID on wallet-card referral-input and Valider button, and add flexWrap:'wrap' on that row so it does not visually clip at 320 px.",
+    "Optional: move SheetModal testID prop from the outer KeyboardAvoidingView onto the inner styles.column View so width assertions in tests reflect the 560 px column."
+  ],
+  "critical_code_review_comments": [
+    "useResponsive.ts is a single source of truth for the responsive frame — clean.",
+    "SheetModal correctly duplicates the FRAME_WIDTH column so modal content stays legible on tablet/desktop; good decision but only observable via inner elements since the testID is on the outer container."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (6/6 viewport scenarios pass)"},
+  "seed_data_creation": "Registered fresh passengers via /auth/register (resp_np_<ts>@test.com / Password123!) with no phone to bypass the phone-verify onboarding gate and reach passenger-home on 844x390/1280x900.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "passager@test.com is currently rate-limited (8 fails/15min) after our login attempts. Use a fresh passenger via register endpoint. After register with a phone number the app pushes to a 'Vérifiez votre numéro' onboarding screen; register WITHOUT phone or click 'Plus tard'/'Later' to reach passenger-home. Frame width constant FRAME_WIDTH=560 kicks in at width>=600 (isTablet). For SheetModal-based sheets the outer KAV takes the full viewport — measure the inner column via sheet-close testID position (right edge of column = sheet-close.x + 40).",
+  "rca_of_issue": "N/A — this is a passing responsive regression."
+}
