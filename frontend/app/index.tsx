@@ -3,11 +3,13 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth, homeFor } from "@/src/context/auth";
+import { useGoogleCallback } from "@/src/hooks/useGoogleAuth";
 import { theme } from "@/src/theme";
 
 export default function Index() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  useGoogleCallback();
 
   useEffect(() => {
     if (loading) return;

@@ -160,3 +160,18 @@ async def legal(lang: str = "fr"):
         "company_name": company, "email": email, "updated_at": "2026-06-01",
         "pages": {k: {"title": v[0], "sections": [{"heading": h, "text": fill(t)} for h, t in v[1]]} for k, v in pages.items()},
     }
+
+
+@router.get("/receipts/{ride_id}.pdf")
+async def public_receipt_pdf(ride_id: str, sig: str):
+    """Signed link embedded in the receipt email (no session token in the URL)."""
+    import hmac as _hmac
+    from emailer import build_receipt_pdf, receipt_sig
+    if not _hmac.compare_digest(sig, receipt_sig(ride_id)):
+        raise HTTPException(403, "Lien invalide")
+    r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
+    if not r or r.get("status") != "completed":
+        raise HTTPException(404, "Reçu indisponible")
+    u = await db.users.find_one({"id": r.get("passenger_id")}, {"_id": 0, "language": 1}) or {}
+    pdf = build_receipt_pdf(r, "fr" if u.get("language", "fr") == "fr" else "en")
+    return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="recu-{r.get("booking_ref") or ride_id}.pdf"'})

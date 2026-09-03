@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import (JWT_SECRET, MODERATOR_EMAILS, client_ip, current_user, db, hash_password, make_token, new_id, normalize_phone, now_utc,
                   rate_limit, send_sms, sms_configured, verify_password)
-from models import (ForgotPasswordIn, LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, ResetPasswordIn, TokenOut,
+from models import (GoogleSessionIn, ForgotPasswordIn, LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, ResetPasswordIn, TokenOut,
                     UserOut)
 from serializers import user_to_out
 
@@ -240,4 +240,47 @@ async def reset_password(data: ResetPasswordIn, request: Request):
     if user.get("is_active") is False:
         raise HTTPException(403, "Compte désactivé par votre gestionnaire")
     user["is_moderator"] = user["email"] in MODERATOR_EMAILS
+    return TokenOut(access_token=make_token(user), user=user_to_out(user))
+
+
+# ---------- Google sign-in (Emergent managed auth) ----------
+EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+
+
+@router.post("/session", response_model=TokenOut)
+async def google_session(data: GoogleSessionIn, request: Request):
+    """Exchange the one-time `session_id` from the Emergent redirect for our own JWT. Upserts the user by email."""
+    import httpx
+    rate_limit(f"gsession:{client_ip(request)}", 20, 900)
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            res = await http.get(EMERGENT_SESSION_URL, headers={"X-Session-ID": data.session_id})
+    except Exception:
+        raise HTTPException(502, "Service d'authentification indisponible")
+    if res.status_code != 200:
+        raise HTTPException(401, "Connexion Google invalide ou expirée, réessayez")
+    info = res.json()
+    email = (info.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(401, "Compte Google sans email")
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if user:
+        if user.get("is_active") is False:
+            raise HTTPException(403, "Compte désactivé par votre gestionnaire")
+        upd = {"last_login_at": now_utc(), "google_linked": True}
+        if info.get("picture") and not user.get("avatar_url"):
+            upd["avatar_url"] = info["picture"]
+        await db.users.update_one({"id": user["id"]}, {"$set": upd})
+        user.update(upd)
+    else:
+        user = {
+            "id": new_id(), "email": email, "password_hash": hash_password(secrets.token_urlsafe(24)),  # unusable password
+            "full_name": (info.get("name") or email.split("@")[0]).strip()[:80], "role": data.role, "phone": None, "phone_verified": False,
+            "sms_enabled": True, "avatar_url": info.get("picture"), "google_linked": True, "rating": 5.0, "total_rides": 0, "is_online": False,
+            "is_active": True, "manager_id": None, "referral_code": secrets.token_hex(3).upper(), "wallet_balance": 0.0, "created_at": now_utc(),
+        }
+        if data.role == "driver":
+            user["docs_blocked"] = True
+        await db.users.insert_one(user.copy())
+    user["is_moderator"] = email in MODERATOR_EMAILS
     return TokenOut(access_token=make_token(user), user=user_to_out(user))

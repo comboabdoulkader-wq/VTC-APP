@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { apiFetch, useAuth } from "@/src/context/auth";
 
 type Ride = any;
@@ -14,6 +15,7 @@ type Earnings = { cancellation_fees?: number; total: number; commission: number;
 const EMPTY: Earnings = { total: 0, commission: 0, net: 0, rides_count: 0, commission_rate: 0.15, platform: { count: 0, gross: 0 }, private: { count: 0, gross: 0, commission: 0 } };
 
 export default function Earnings() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const [earnings, setEarnings] = useState<Earnings>(EMPTY);
@@ -44,7 +46,7 @@ export default function Earnings() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
       testID="earnings-screen"
     >
-      <Text style={styles.title}>Mes gains</Text>
+      <Text style={styles.title}>{t("my_earnings")}</Text>
 
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>Net chauffeur</Text>

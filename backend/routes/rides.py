@@ -10,6 +10,7 @@ from core import (
 from push import push_safe
 from catalog import CANCELLATION_POLICY, SERVICES, VEHICLES, booking_ref, fits, hourly_price, match_fixed_route
 from flights import lookup_flight, normalize_flight
+from emailer import send_ride_receipt
 from models import EstimateIn, EstimateOut, RateIn, RideBatchIn, RideCreateIn, RideOut, VehicleEstimate
 from serializers import ride_to_out
 
@@ -309,6 +310,7 @@ async def complete_ride(ride_id: str, user=Depends(require_role("driver"))):
     await distribute_referral(r)
     await notify(r.get("passenger_id"), "completed", "Course terminée",
                  f"Merci d'avoir voyagé avec {user['full_name']}. Notez votre chauffeur !", ride_id, sms=True)
+    await send_ride_receipt(r)  # cash / wallet-paid rides: receipt right away (card rides: after payment)
     return ride_to_out(r)
 
 
@@ -363,3 +365,24 @@ async def rate_ride(ride_id: str, data: RateIn, user=Depends(require_role("passe
             await db.users.update_one({"id": r["driver_id"]}, {"$set": {"rating": round(new_rating, 2)}, "$inc": {"rated_count": 1}})
     r["rating"], r["tip"] = data.rating, data.tip
     return ride_to_out(r)
+
+
+@router.get("/{ride_id}/receipt.pdf")
+async def ride_receipt_pdf(ride_id: str, user=Depends(current_user)):
+    from fastapi.responses import Response
+    from emailer import build_receipt_pdf
+    r = await db.rides.find_one({"id": ride_id, "$or": [{"passenger_id": user["id"]}, {"driver_id": user["id"]}]}, {"_id": 0})
+    if not r or r.get("status") != "completed":
+        raise HTTPException(404, "Reçu indisponible")
+    pdf = build_receipt_pdf(r, "fr" if user.get("language", "fr") == "fr" else "en")
+    return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="recu-{r.get("booking_ref") or ride_id}.pdf"'})
+
+
+@router.post("/{ride_id}/send-receipt")
+async def resend_receipt(ride_id: str, user=Depends(current_user)):
+    r = await db.rides.find_one({"id": ride_id, "passenger_id": user["id"]}, {"_id": 0})
+    if not r or r.get("status") != "completed" or r.get("payment_status") != "paid":
+        raise HTTPException(404, "Reçu indisponible")
+    r.pop("receipt_sent_at", None)  # explicit user request → allow re-send
+    ok = await send_ride_receipt(r)
+    return {"ok": ok, "email": user.get("email")}

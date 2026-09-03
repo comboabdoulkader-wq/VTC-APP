@@ -101,6 +101,9 @@ async def mark_paid(ride_id: str, payment_intent: Optional[str], session_id: str
         await db.rides.update_one({"id": ride_id}, {"$set": {"payment_status": "paid", "payment_method": "card"}})
         await notify(ride.get("passenger_id"), "paid", "Paiement confirmé", f"{ride['price']:.2f} € réglés par carte", ride_id)
         await notify(ride.get("driver_id"), "paid", "Course payée par carte", f"{ride['price']:.2f} € — {ride['passenger_name']}", ride_id)
+        if ride.get("status") == "completed":
+            from emailer import send_ride_receipt
+            await send_ride_receipt({**ride, "payment_status": "paid", "payment_method": "card"})
 
 
 @router.get("/status/{ride_id}")

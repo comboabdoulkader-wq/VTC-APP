@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import SheetModal from "@/src/components/ui/SheetModal";
 import { pickImage, uploadDocument } from "@/src/utils/files";
@@ -31,6 +32,7 @@ const parseFr = (s: string): string | null => {
 };
 
 export default function Documents() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { token, refresh } = useAuth();
   const [data, setData] = useState<Compliance | null>(null);
@@ -107,7 +109,7 @@ export default function Documents() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]} testID="documents-screen">
-      <View style={styles.header}><Text style={styles.title}>Mes documents</Text><Text style={styles.subtitle}>Conformité chauffeur et véhicule</Text></View>
+      <View style={styles.header}><Text style={styles.title}>{t("my_documents")}</Text><Text style={styles.subtitle}>{t("documents_subtitle")}</Text></View>
       {!data ? <ActivityIndicator style={{ marginTop: 40 }} color={theme.color.onSurface} /> : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: insets.bottom + 40 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
           {data.blocked ? (

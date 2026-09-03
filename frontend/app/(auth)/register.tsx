@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import GoogleButton from "@/src/components/GoogleButton";
 import { useAuth, Role, homeFor } from "@/src/context/auth";
 
 export default function Register() {
@@ -148,6 +149,7 @@ export default function Register() {
         </View>
 
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
+        {role !== "company" && <GoogleButton role={role} />}
 
         <Pressable
           testID="register-submit-button"

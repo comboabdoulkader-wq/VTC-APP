@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import AccountingExport from "@/src/components/AccountingExport";
 import { money, fmtDateTime, STATUS_LABELS } from "@/src/utils/format";
@@ -13,6 +14,7 @@ type Overview = { employees_count: number; active_employees: number; spent_month
 const ACTIVE = ["requested", "accepted", "in_progress"];
 
 export default function CompanyDashboard() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -40,8 +42,8 @@ export default function CompanyDashboard() {
     <ScrollView style={{ flex: 1, backgroundColor: theme.color.surface }} testID="company-dashboard"
       contentContainerStyle={{ paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom + 40, paddingHorizontal: theme.spacing.xl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
-      <Text style={styles.title}>{overview?.company_name || "Tableau de bord"}</Text>
-      <Text style={styles.subtitle}>Déplacements professionnels · suivi en temps réel</Text>
+      <Text style={styles.title}>{overview?.company_name || t("tab_dashboard")}</Text>
+      <Text style={styles.subtitle}>{t("company_subtitle")}</Text>
 
       {loading && !overview ? <ActivityIndicator style={{ marginTop: 40 }} color={theme.color.onSurface} /> : overview && (
         <>

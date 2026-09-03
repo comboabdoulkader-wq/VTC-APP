@@ -52,7 +52,7 @@ export default function Rides() {
     <View style={[styles.root, { paddingTop: insets.top }]} testID="rides-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t("tab_rides")}</Text>
-        {activeCount > 0 && <Text style={styles.subtitle}>{activeCount} en cours · suivi en temps réel</Text>}
+        {activeCount > 0 && <Text style={styles.subtitle}>{t("active_rides", { n: activeCount })}</Text>}
       </View>
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={theme.color.onSurface} />

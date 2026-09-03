@@ -31,10 +31,20 @@ const I18nCtx = createContext<Ctx>({ lang: "fr", isRTL: false, t: (k) => String(
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>("fr");
   useEffect(() => { AsyncStorage.getItem(KEY).then((v) => setLangState((v as Lang) || detectLang())).catch(() => setLangState(detectLang())); }, []);
+  const applyDirection = useCallback((l: Lang) => {
+    const rtl = l === "ar";
+    if (Platform.OS === "web") {
+      if (typeof document !== "undefined") { document.documentElement.dir = rtl ? "rtl" : "ltr"; document.documentElement.lang = l; }
+      return;
+    }
+    // Native: layout direction is applied at next app start (React Native limitation)
+    I18nManager.allowRTL(rtl);
+    if (I18nManager.isRTL !== rtl) I18nManager.forceRTL(rtl);
+  }, []);
+  useEffect(() => { applyDirection(lang); }, [lang, applyDirection]);
   const setLang = useCallback(async (l: Lang) => {
     setLangState(l);
     await AsyncStorage.setItem(KEY, l);
-    if (Platform.OS !== "web") I18nManager.allowRTL(l === "ar");
   }, []);
   const t = useCallback((key: keyof Dict, params?: Record<string, string | number>) => {
     let s = String(DICTS[lang][key] ?? fr[key] ?? key);

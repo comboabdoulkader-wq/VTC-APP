@@ -66,6 +66,14 @@ export default function RideDetail() {
     } catch {}
   };
 
+  const [receiptMsg, setReceiptMsg] = useState<string | null>(null);
+  const emailReceipt = async () => {
+    try {
+      const r = await apiFetch<{ ok: boolean; email: string }>(`/rides/${id}/send-receipt`, { method: "POST" }, token);
+      setReceiptMsg(r.ok ? t("receipt_sent", { email: r.email }) : t("receipt_failed"));
+    } catch { setReceiptMsg(t("receipt_failed")); }
+  };
+
   const submitRating = async (p: ReviewPayload) => {
     setSubmittingRate(true);
     try {
@@ -234,7 +242,7 @@ export default function RideDetail() {
               {paying ? <ActivityIndicator color="#fff" /> : (
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                   <Icon name="lock" size={16} color="#fff" />
-                  <Text style={styles.primaryText}>Payer par carte • {money(ride.due_amount ?? ride.price)}</Text>
+                  <Text style={styles.primaryText}>{t("pay_by_card")} • {money(ride.due_amount ?? ride.price)}</Text>
                 </View>
               )}
             </Pressable>
@@ -249,6 +257,18 @@ export default function RideDetail() {
               <Text style={styles.infoText}>Votre note : {ride.rating}/5{ride.review?.comment ? ` · « ${ride.review.comment} »` : ""}</Text>
             </View>
           ) : null}
+
+          {ride.status === "completed" && ride.payment_status === "paid" && (
+            <View style={{ flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+              <Pressable testID="receipt-pdf" onPress={() => Linking.openURL(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/rides/${ride.id}/receipt.pdf?token=${token}`)} style={[styles.secondary, { flex: 1, marginBottom: 0 }]}>
+                <Icon name="file-pdf-box" size={18} color={theme.color.onSurface} /><Text style={styles.secondaryText}>{t("receipt_pdf")}</Text>
+              </Pressable>
+              <Pressable testID="receipt-email" onPress={emailReceipt} style={[styles.secondary, { flex: 1, marginBottom: 0 }]}>
+                <Icon name="email-fast-outline" size={18} color={theme.color.onSurface} /><Text style={styles.secondaryText}>{t("email_receipt")}</Text>
+              </Pressable>
+            </View>
+          )}
+          {receiptMsg ? <Text style={styles.infoText} testID="receipt-msg">{receiptMsg}</Text> : null}
 
           {["completed", "cancelled"].includes(ride.status) && (
             <Pressable testID="book-again" onPress={() => router.push({ pathname: "/(passenger)", params: { rebook: ride.id } } as any)} style={styles.secondary}>

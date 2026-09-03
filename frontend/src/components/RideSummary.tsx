@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 
 type Flight = { number: string; airline?: string | null; status?: string | null; arrival_delay_min?: number | null; arrival_terminal?: string | null; arrival_estimated?: string | null; arrival_airport?: string | null; tracking_error?: string | null; checked_at?: string | null };
 
@@ -16,6 +17,7 @@ const fmtTime = (iso?: string | null) => {
 
 /** Booking reference, service, passengers/luggage and flight card shown on the ride detail (passenger & driver). */
 export default function RideSummary({ ride, compact }: { ride: any; compact?: boolean }) {
+  const { t, lang } = useI18n();
   const f: Flight | null = ride.flight || null;
   const pax = (ride.passengers || 1) + (ride.children || 0);
   return (
@@ -24,13 +26,13 @@ export default function RideSummary({ ride, compact }: { ride: any; compact?: bo
         {ride.booking_ref ? (
           <View style={styles.refPill} testID="booking-ref"><Icon name="ticket-confirmation-outline" size={14} color={theme.color.onSurface} /><Text style={styles.refText}>{ride.booking_ref}</Text></View>
         ) : null}
-        <Text style={styles.service}>{ride.service_label || "Chauffeur privé"}{ride.hours ? ` · ${ride.hours} h` : ""}</Text>
+        <Text style={styles.service}>{(lang !== "fr" && ride.service_labels?.[lang]) || ride.service_label || t("tab_home")}{ride.hours ? ` · ${ride.hours} h` : ""}</Text>
       </View>
       <View style={[styles.row, { marginTop: 6 }]}>
-        <Icon name="account-multiple" size={15} color={theme.color.onSurfaceSecondary} /><Text style={styles.meta}>{pax} passager{pax > 1 ? "s" : ""}{ride.children ? ` (${ride.children} enfant${ride.children > 1 ? "s" : ""})` : ""}</Text>
-        {ride.child_seats ? <><Icon name="car-child-seat" size={15} color={theme.color.onSurfaceSecondary} /><Text style={styles.meta}>{ride.child_seats} siège{ride.child_seats > 1 ? "s" : ""}</Text></> : null}
-        <Icon name="bag-suitcase" size={15} color={theme.color.onSurfaceSecondary} /><Text style={styles.meta}>{ride.luggage || 0} bagage{(ride.luggage || 0) > 1 ? "s" : ""}</Text>
-        {ride.fixed_price ? <Text style={styles.fixed}>Prix fixe</Text> : null}
+        <Icon name="account-multiple" size={15} color={theme.color.onSurfaceSecondary} /><Text style={styles.meta}>{t("passengers_n", { n: pax })}</Text>
+        {ride.child_seats ? <><Icon name="car-child-seat" size={15} color={theme.color.onSurfaceSecondary} /><Text style={styles.meta}>{t("seats_n", { n: ride.child_seats })}</Text></> : null}
+        <Icon name="bag-suitcase" size={15} color={theme.color.onSurfaceSecondary} /><Text style={styles.meta}>{t("luggage_n", { n: ride.luggage || 0 })}</Text>
+        {ride.fixed_price ? <Text style={styles.fixed}>{t("fixed_price_short")}</Text> : null}
       </View>
       {f && f.number ? (
         <View style={styles.flight} testID="flight-card">

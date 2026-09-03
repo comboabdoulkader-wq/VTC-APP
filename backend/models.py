@@ -53,6 +53,11 @@ class PhoneVerifyIn(BaseModel):
     code: str = Field(min_length=6, max_length=6)
 
 
+class GoogleSessionIn(BaseModel):
+    session_id: str = Field(min_length=8, max_length=512)
+    role: Literal["passenger", "driver"] = "passenger"
+
+
 class ForgotPasswordIn(BaseModel):
     identifier: str = Field(min_length=3, max_length=120)  # email or phone number
 
@@ -234,6 +239,7 @@ class RideOut(BaseModel):
     booking_ref: Optional[str] = None
     service_type: str = "private"
     service_label: str = "Chauffeur privé"
+    service_labels: Optional[dict] = None
     hours: int = 0
     passengers: int = 1
     children: int = 0

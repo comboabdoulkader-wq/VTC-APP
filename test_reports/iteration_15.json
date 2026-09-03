@@ -1,0 +1,17 @@
+{
+  "summary": "Iteration 16 - Email receipts, RTL/translations, Google sign-in - fully validated. Backend: 8/8 pytest passing (receipt.pdf via Bearer AND ?token=, non-completed→404, send-receipt to @test.com returns {ok:false,email:'passager@test.com'} as expected, signed public receipt with bad sig→403, POST /auth/session invalid→401 with 'Connexion Google invalide' message and missing body→422, and full cash ride flow with delivered@resend.dev triggers Emergent email proxy call producing receipt_email_id + receipt_sent_at in MongoDB). Frontend (390x844): google-signin visible on login ('Continue with Google') and on register for passenger/driver roles but hidden for company; clicking google-signin redirects to https://auth.emergentagent.com/oauth/?redirect=...; passenger ride detail of completed paid ride shows receipt-pdf/receipt-email buttons and receipt-msg = 'Could not send right now' (EN, equivalent to FR 'Envoi impossible pour le moment') after clicking receipt-email for @test.com; RideSummary chips read '3 passenger(s) · 2 bag(s)' in EN and '3 passager(s) · 2 bagage(s)' in FR; profile lang-ar → document.documentElement.dir='rtl' with Arabic tabs, lang-fr → dir='ltr'; driver EN: 'My earnings' and 'My documents' titles rendered; company EN dashboard subtitle 'Business travel · live tracking' present. Languages restored to FR after tests.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration16.py", "/app/test_reports/pytest/iteration16.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RideOut model (backend/models.py) does not expose receipt_sent_at/receipt_email_id. Not blocking (verified in MongoDB) but frontend cannot show 'receipt sent at' badge without either adding those fields to RideOut or querying send-receipt endpoint.",
+    "receipt_sig() uses first 32 hex chars of HMAC-SHA256 → 128-bit entropy which is fine, but consider rotating JWT_SECRET invalidates all previously emailed links; document this behavior."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration16.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all listed items validated)"},
+  "seed_data_creation": "Registered/logged in delivered@resend.dev (password123, role=passenger) via existing register endpoint; created one cash ride (id 3c7ae095…) and completed it – receipt_email_id 01a065ac-6b58-703d-b369-476b33ab96dd was returned by the Emergent email proxy (real delivery to the Resend test recipient).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend rides listing endpoint is GET /api/rides/mine (not /api/rides – the latter returns 405). To create a ride, RideCreateIn requires vehicle_type (e.g. 'standard'). RideOut serializer does NOT include receipt_sent_at, verify auto-send via MongoDB read (db.rides.receipt_sent_at) rather than API. delivered@resend.dev is the accepted deliverable test recipient. Login rate limit is 8 fails/15min per email so do not spam the login."
+}
