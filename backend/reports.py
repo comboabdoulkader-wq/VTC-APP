@@ -123,6 +123,53 @@ def build_commission_pdf(title: str, subtitle: str, lines: List[dict], totals: d
     return buf.getvalue()
 
 
+def build_payouts_csv(payouts: List[dict]) -> str:
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Date demande", "Partenaire", "Montant EUR", "Statut", "Traité le", "Traité par", "Note"])
+    st = {"pending": "En attente", "paid": "Réglé", "rejected": "Refusé"}
+    for p in payouts:
+        cd = p.get("created_at"); sd = p.get("settled_at")
+        w.writerow([
+            cd.strftime("%d/%m/%Y %H:%M") if hasattr(cd, "strftime") else "",
+            p.get("partner_name") or "", f"{p.get('amount', 0):.2f}", st.get(p.get("status"), p.get("status", "")),
+            sd.strftime("%d/%m/%Y %H:%M") if hasattr(sd, "strftime") else "",
+            p.get("settled_by") or "", p.get("note") or "",
+        ])
+    return buf.getvalue()
+
+
+def build_payouts_pdf(title: str, subtitle: str, payouts: List[dict]) -> bytes:
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=14 * mm, bottomMargin=14 * mm)
+    styl = getSampleStyleSheet()
+    st = {"pending": "En attente", "paid": "Réglé", "rejected": "Refusé"}
+    total_paid = round(sum(p["amount"] for p in payouts if p.get("status") == "paid"), 2)
+    total_pending = round(sum(p["amount"] for p in payouts if p.get("status") == "pending"), 2)
+    story = [Paragraph(title, styl["Title"]), Paragraph(subtitle, styl["Normal"]),
+             Paragraph(f"Réglé : {total_paid:.2f} € · En attente : {total_pending:.2f} € · {len(payouts)} demande(s)", styl["Normal"]), Spacer(1, 6 * mm)]
+    headers = ["Date", "Partenaire", "Montant €", "Statut", "Traité le", "Par"]
+    small = styl["Normal"].clone("smallp"); small.fontSize = 8; small.leading = 10
+    data = [headers]
+    for p in payouts:
+        cd = p.get("created_at"); sd = p.get("settled_at")
+        data.append([
+            cd.strftime("%d/%m/%Y") if hasattr(cd, "strftime") else "",
+            Paragraph(p.get("partner_name") or "", small), f"{p.get('amount', 0):.2f}", st.get(p.get("status"), ""),
+            sd.strftime("%d/%m/%Y") if hasattr(sd, "strftime") else "", Paragraph(p.get("settled_by") or "", small),
+        ])
+    t = Table(data, repeatRows=1, colWidths=[22 * mm, 55 * mm, 22 * mm, 22 * mm, 22 * mm, 30 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#141414")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#DDDDDD")), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+    ]))
+    story.append(t)
+    doc.build(story)
+    return buf.getvalue()
+
+
 def build_pdf(title: str, subtitle: str, groups: List[dict], group_title: str) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=14 * mm, bottomMargin=14 * mm)

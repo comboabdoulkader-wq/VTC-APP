@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from core import current_user, db, new_id, now_utc, require_role
-from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, JoinCompanyIn, PayoutIn, PayoutDecisionIn, RideOut
+from models import PartnerBookingIn, EmployeeOut, EmployeeUpdateIn, GuestIn, JoinCompanyIn, PayoutIn, PayoutDecisionIn, RideOut
 from reports import build_csv, build_pdf, group_rides, month_label, rides_for
 from serializers import ride_to_out, user_to_out
 
@@ -181,6 +181,7 @@ async def create_partner_booking(data: PartnerBookingIn, user=Depends(company_on
     })
     await db.rides.insert_one(ride.copy())
     await push_new_rides_to_drivers([ride])
+    await upsert_partner_guest(user["id"], data.guest_name.strip(), phone, (data.room or "").strip() or None, data.vehicle_type, booked=True)
     if phone:
         # Remember this guest so that, if they create their own account later with the same number,
         # the partner becomes their sponsor and keeps earning cascading commissions on future rides.
@@ -207,11 +208,12 @@ async def partner_bookings(status: Optional[str] = None, user=Depends(company_on
 @router.get("/partner")
 async def partner_info(user=Depends(company_only)):
     from core import tracking_url
-    from routes.referral import PARTNER_RATE
+    from routes.referral import partner_tier_info
     active = [r async for r in db.rides.find({"company_id": user["id"], "partner_booking": True, "status": {"$in": ["requested", "accepted", "in_progress"]}}, {"_id": 0})]
+    tier = await partner_tier_info(user["id"])
     return {
         "partner_type": user.get("partner_type", "company"), "partner_discount": user.get("partner_discount", 0.0),
-        "commission_rate": PARTNER_RATE, "wallet_balance": round(user.get("wallet_balance", 0) or 0, 2),
+        "commission_rate": tier["rate"], "tier": tier, "wallet_balance": round(user.get("wallet_balance", 0) or 0, 2),
         "company_name": user.get("company_name"), "active_bookings": len(active),
         "tracking_base": tracking_url({"share_token": "X"}).rsplit("/X", 1)[0] if tracking_url({"share_token": "X"}) else None,
     }
@@ -232,15 +234,16 @@ async def _commission_lines(user_id: str, month: Optional[str]):
 @router.get("/commissions")
 async def commissions(month: Optional[str] = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(company_only)):
     from reports import month_label
-    from routes.referral import PARTNER_RATE
+    from routes.referral import partner_tier_info
     lines = await _commission_lines(user["id"], month)
     direct = round(sum(l["amount"] for l in lines if l["type"] == "partner_commission"), 2)
     network = round(sum(l["amount"] for l in lines if l["type"] in ("referral_l1", "referral_l2")), 2)
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
     payouts = [p async for p in db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50)]
+    tier = await partner_tier_info(user["id"])
     return {
         "month": month, "label": month_label(month) if month else "Toutes périodes",
-        "rate": PARTNER_RATE, "balance": round((fresh or {}).get("wallet_balance", 0) or 0, 2),
+        "rate": tier["rate"], "tier": tier, "balance": round((fresh or {}).get("wallet_balance", 0) or 0, 2),
         "earned": round(direct + network, 2), "direct": direct, "network": network, "count": len(lines),
         "lines": lines, "payouts": payouts,
     }
@@ -331,6 +334,36 @@ async def admin_payouts(status: Optional[str] = None, user=Depends(moderator_onl
     return {"payouts": items, "pending_count": sum(1 for p in items if p["status"] == "pending"), "pending_total": pending_total}
 
 
+async def _payouts_for_export(status: Optional[str], month: Optional[str]):
+    q = {}
+    if status in ("pending", "paid", "rejected"):
+        q["status"] = status
+    if month:
+        from reports import month_bounds
+        start, end = month_bounds(month)
+        q["created_at"] = {"$gte": start, "$lt": end}
+    return [p async for p in db.payouts.find(q, {"_id": 0}).sort("created_at", -1).limit(2000)]
+
+
+@router.get("/admin/payouts/export.csv")
+async def admin_payouts_csv(status: Optional[str] = None, month: Optional[str] = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(moderator_only)):
+    from reports import build_payouts_csv
+    items = await _payouts_for_export(status, month)
+    return Response(build_payouts_csv(items), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="versements-partenaires{("-" + month) if month else ""}.csv"'})
+
+
+@router.get("/admin/payouts/export.pdf")
+async def admin_payouts_pdf(status: Optional[str] = None, month: Optional[str] = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"), user=Depends(moderator_only)):
+    from reports import build_payouts_pdf, month_label
+    items = await _payouts_for_export(status, month)
+    sub = f"Période : {month_label(month)}" if month else "Toutes périodes"
+    if status:
+        sub += f" · statut : {status}"
+    pdf = build_payouts_pdf("Versements partenaires — comptabilité", sub, items)
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="versements-partenaires{("-" + month) if month else ""}.pdf"'})
+
+
 @router.patch("/admin/payouts/{payout_id}")
 async def decide_payout(payout_id: str, data: PayoutDecisionIn, user=Depends(moderator_only)):
     from routes.referral import credit_wallet
@@ -397,3 +430,57 @@ async def monthly_statement_sweep():
         pdf_url = f"{frontend}/api/company/commission-statements/{u['id']}.pdf?month={prev_month}&sig={statement_sig(u['id'], prev_month)}" if frontend.startswith("https://") else None
         await send_partner_statement(to=u["email"], name=u.get("company_name") or "Partenaire", month_label=month_label(prev_month),
                                       totals=totals, pdf_url=pdf_url, lang="fr" if u.get("language", "fr") == "fr" else "en")
+
+
+# ---------- Saved clients (partner guest book): store preferences to pre-fill bookings ----------
+async def upsert_partner_guest(company_id: str, name: str, phone: Optional[str], room: Optional[str], vehicle_type: Optional[str], booked: bool = False):
+    """Create or refresh a saved client for a partner, keyed by phone when available, else by lower-cased name."""
+    key = {"company_id": company_id}
+    key.update({"phone": phone} if phone else {"name_key": name.lower()})
+    existing = await db.partner_guests.find_one(key, {"_id": 0})
+    now = now_utc()
+    fields = {"company_id": company_id, "name": name, "name_key": name.lower(), "phone": phone, "updated_at": now}
+    if room:
+        fields["room"] = room
+    if vehicle_type:
+        fields["vehicle_type"] = vehicle_type
+    if existing:
+        inc = {"bookings_count": 1} if booked else {}
+        upd = {"$set": {**fields, **({"last_booked_at": now} if booked else {})}}
+        if inc:
+            upd["$inc"] = inc
+        await db.partner_guests.update_one({"id": existing["id"]}, upd)
+    else:
+        await db.partner_guests.insert_one({"id": new_id(), **fields, "notes": None, "room": room, "vehicle_type": vehicle_type,
+                                            "bookings_count": 1 if booked else 0, "last_booked_at": now if booked else None, "created_at": now})
+
+
+@router.get("/guests")
+async def list_guests(user=Depends(company_only)):
+    return [g async for g in db.partner_guests.find({"company_id": user["id"]}, {"_id": 0, "name_key": 0}).sort([("last_booked_at", -1), ("name", 1)]).limit(200)]
+
+
+@router.post("/guests")
+async def save_guest(data: GuestIn, user=Depends(company_only)):
+    from core import normalize_phone
+    phone = None
+    if data.phone and data.phone.strip():
+        phone = normalize_phone(data.phone)
+        if not phone:
+            raise HTTPException(422, "Téléphone invalide (format +33 6 12 34 56 78)")
+    await upsert_partner_guest(user["id"], data.name.strip(), phone, (data.room or "").strip() or None, data.vehicle_type)
+    key = {"company_id": user["id"]}
+    key.update({"phone": phone} if phone else {"name_key": data.name.strip().lower()})
+    g = await db.partner_guests.find_one(key, {"_id": 0, "name_key": 0})
+    if data.notes is not None:
+        await db.partner_guests.update_one({"id": g["id"]}, {"$set": {"notes": data.notes.strip() or None}})
+        g["notes"] = data.notes.strip() or None
+    return g
+
+
+@router.delete("/guests/{guest_id}")
+async def delete_guest(guest_id: str, user=Depends(company_only)):
+    res = await db.partner_guests.delete_one({"id": guest_id, "company_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Client introuvable")
+    return {"ok": True}

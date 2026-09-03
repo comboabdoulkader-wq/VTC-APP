@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="13" time="2.875" timestamp="2026-09-03T08:35:33.684287+00:00" hostname="agent-env-a1b8cd14-4d24-41d7-9b1b-bf52c787043d"><testcase classname="tests.test_iteration21.TestExportComptable" name="test_csv_export_moderator_ok" time="0.565" /><testcase classname="tests.test_iteration21.TestBadgesFidelite" name="test_partner_returns_tier" time="0.635" /><testcase classname="tests.test_iteration21.TestExportComptable" name="test_pdf_export_moderator_ok" time="0.124" /><testcase classname="tests.test_iteration21.TestBadgesFidelite" name="test_commissions_returns_tier" time="0.175" /><testcase classname="tests.test_iteration21.TestExportComptable" name="test_csv_with_filters" time="0.226" /><testcase classname="tests.test_iteration21.TestBadgesFidelite" name="test_tier_thresholds_logic" time="0.239" /><testcase classname="tests.test_iteration21.TestExportComptable" name="test_pdf_with_filters" time="0.142" /><testcase classname="tests.test_iteration21.TestNotesClients" name="test_crud_guest" time="0.603" /><testcase classname="tests.test_iteration21.TestExportComptable" name="test_csv_non_moderator_forbidden" time="0.378" /><testcase classname="tests.test_iteration21.TestExportComptable" name="test_pdf_non_moderator_forbidden" time="0.151" /><testcase classname="tests.test_iteration21.TestNotesClients" name="test_delete_unknown_returns_404" time="0.169" /><testcase classname="tests.test_iteration21.TestAlerteNouveauFilleul" name="test_partner_lead_creates_sponsor_and_notif" time="0.626"><failure message="RuntimeError: Event loop is closed">tests/test_iteration21.py:189: in test_partner_lead_creates_sponsor_and_notif
+    u, after = loop.run_until_complete(_verify())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/test_iteration21.py:183: in _verify
+    u = await db.users.find_one({"id": new_user["id"]}, {"_id": 0, "sponsor_id": 1})
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:74: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</failure></testcase><testcase classname="tests.test_iteration21.TestNotesClients" name="test_booking_auto_upserts_guest" time="0.522" /></testsuite></testsuites>

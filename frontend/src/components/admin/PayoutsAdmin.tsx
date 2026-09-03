@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Alert, Linking } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { money, fmtDateTime } from "@/src/utils/format";
 import SheetModal from "@/src/components/ui/SheetModal";
+
+const API = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 type Payout = { id: string; partner_name: string; amount: number; status: string; note: string | null; created_at: string; settled_at: string | null; settled_by: string | null };
 type Data = { payouts: Payout[]; pending_count: number; pending_total: number };
@@ -36,6 +39,12 @@ export default function PayoutsAdmin({ visible, onClose }: { visible: boolean; o
   }, [token, filter]);
   useEffect(() => { if (visible) load(); }, [visible, load]);
 
+  const download = async (fmt: "csv" | "pdf") => {
+    const s = filter === "pending" ? "&status=pending" : "";
+    const url = `${API}/api/company/admin/payouts/export.${fmt}?token=${token}${s}`;
+    if (Platform.OS === "web") Linking.openURL(url); else await WebBrowser.openBrowserAsync(url);
+  };
+
   const decide = (p: Payout, status: "paid" | "rejected") => {
     const verb = status === "paid" ? "Marquer comme réglé" : "Refuser (remboursement au portefeuille)";
     confirm(`${verb} · ${p.partner_name} · ${money(p.amount)} ?`, async () => {
@@ -56,6 +65,11 @@ export default function PayoutsAdmin({ visible, onClose }: { visible: boolean; o
         ))}
       </View>
       {filter === "pending" && (data?.pending_total ?? 0) > 0 ? <Text style={styles.total}>À régler : <Text style={{ fontWeight: "800", color: theme.color.onSurface }}>{money(data?.pending_total)}</Text></Text> : null}
+
+      <View style={styles.exportRow}>
+        <Pressable testID="payouts-export-csv" onPress={() => download("csv")} style={styles.exportBtn}><Icon name="file-delimited-outline" size={16} color={theme.color.onSurface} /><Text style={styles.exportText}>Export CSV</Text></Pressable>
+        <Pressable testID="payouts-export-pdf" onPress={() => download("pdf")} style={styles.exportBtn}><Icon name="file-pdf-box" size={16} color={theme.color.onSurface} /><Text style={styles.exportText}>Export PDF</Text></Pressable>
+      </View>
 
       {loading ? <ActivityIndicator style={{ marginVertical: 24 }} color={theme.color.onSurface} /> : (
         data && data.payouts.length > 0 ? data.payouts.map((p) => {
@@ -88,6 +102,9 @@ const styles = StyleSheet.create({
   chip: { height: 36, paddingHorizontal: theme.spacing.lg, borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   chipActive: { backgroundColor: theme.color.brand }, chipText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   total: { fontSize: 13, color: theme.color.onSurfaceSecondary, marginBottom: theme.spacing.md },
+  exportRow: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
+  exportBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 40, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.color.border },
+  exportText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   card: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.lg, marginBottom: theme.spacing.md },
   head: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   partner: { flex: 1, fontSize: 16, fontWeight: "800", color: theme.color.onSurface },

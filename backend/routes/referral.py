@@ -15,6 +15,44 @@ LEVEL2_RATE = 0.03              # level-2 sponsor gets 3 % of the level-1 commis
 PARTNER_RATE = 0.05             # hotels / concierges / agencies earn 5 % on their clients' rides (like drivers)
 PARTNER_TYPES = {"hotel", "concierge", "agency"}
 
+# Loyalty tiers: the more completed guest bookings a partner brings, the higher their commission rate.
+# Ordered from highest requirement to lowest so the first match wins.
+PARTNER_TIERS = [
+    {"key": "platinum", "label": "Platine", "min_rides": 100, "rate": 0.08, "icon": "crown"},
+    {"key": "gold", "label": "Or", "min_rides": 50, "rate": 0.07, "icon": "medal"},
+    {"key": "silver", "label": "Argent", "min_rides": 20, "rate": 0.06, "icon": "medal-outline"},
+    {"key": "bronze", "label": "Bronze", "min_rides": 0, "rate": PARTNER_RATE, "icon": "star-circle-outline"},
+]
+
+
+def tier_for(count: int) -> dict:
+    for t in PARTNER_TIERS:
+        if count >= t["min_rides"]:
+            return t
+    return PARTNER_TIERS[-1]
+
+
+def next_tier(count: int) -> Optional[dict]:
+    higher = [t for t in PARTNER_TIERS if t["min_rides"] > count]
+    return min(higher, key=lambda t: t["min_rides"]) if higher else None
+
+
+async def partner_booking_count(company_id: str) -> int:
+    return await db.rides.count_documents({"company_id": company_id, "partner_booking": True, "status": "completed"})
+
+
+async def partner_tier_info(company_id: str) -> dict:
+    count = await partner_booking_count(company_id)
+    tier = tier_for(count)
+    nxt = next_tier(count)
+    return {
+        "completed_bookings": count, "tier": tier["key"], "tier_label": tier["label"], "tier_icon": tier["icon"],
+        "rate": tier["rate"],
+        "next_tier_label": nxt["label"] if nxt else None, "next_tier_rate": nxt["rate"] if nxt else None,
+        "next_tier_min": nxt["min_rides"] if nxt else None,
+        "to_next": (nxt["min_rides"] - count) if nxt else 0,
+    }
+
 
 def sponsor_rate(sponsor: dict) -> float:
     """Level-1 commission rate for a sponsor. Partners (hotels/concierges/agencies) get the partner rate."""
@@ -77,14 +115,15 @@ async def distribute_partner_commission(ride: dict):
         return
     price = ride.get("price", 0)
     guest = ride.get("guest_name") or ride.get("passenger_label") or "un client"
-    c1 = round(price * PARTNER_RATE, 2)
+    rate = tier_for(await partner_booking_count(ride["company_id"]))["rate"]
+    c1 = round(price * rate, 2)
     await credit_wallet(partner["id"], c1, "partner_commission", f"Commission client · course de {guest}", ride["id"])
     await notify(partner["id"], "wallet", "Portefeuille crédité", f"+{c1:.2f} € de commission sur la course de {guest}", ride["id"])
     if partner.get("sponsor_id"):
         c2 = round(c1 * LEVEL2_RATE, 2)
         await credit_wallet(partner["sponsor_id"], c2, "referral_l2", f"Commission réseau niveau 2 · via {partner.get('company_name') or 'partenaire'}", ride["id"])
     await db.rides.update_one({"id": ride["id"]}, {"$set": {
-        "partner_commission_paid": True, "partner_commission_rate": PARTNER_RATE, "partner_commission_amount": c1,
+        "partner_commission_paid": True, "partner_commission_rate": rate, "partner_commission_amount": c1,
         "platform_fee": round(price * PLATFORM_FEE_RATE, 2),
     }})
 

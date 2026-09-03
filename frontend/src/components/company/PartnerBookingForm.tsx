@@ -25,12 +25,17 @@ export default function PartnerBookingForm({ visible, onClose, onCreated, discou
   const [pax, setPax] = useState(1); const [bags, setBags] = useState(1);
   const [options, setOptions] = useState<VehicleOption[]>([]); const [vehicle, setVehicle] = useState<string>("premium");
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
+  const [guests, setGuests] = useState<any[]>([]);
   const isAirport = (p: Place | null) => /a[ée]roport|airport|cdg|orly|beauvais/i.test(`${p?.name} ${p?.address}`);
   const service = isAirport(pickup) || isAirport(dropoff) ? "airport" : "private";
 
   useEffect(() => {
     if (!visible) { setGuest(""); setPhone(""); setRoom(""); setFlight(""); setNotes(""); setPickup(null); setDropoff(null); setWhen(null); setOptions([]); setError(null); setPax(1); setBags(1); }
+    else apiFetch<any[]>("/company/guests", {}, token).then(setGuests).catch(() => setGuests([]));
   }, [visible]);
+
+  const prefill = (g: any) => { setGuest(g.name || ""); setPhone(g.phone || ""); setRoom(g.room || ""); setNotes(g.notes || ""); if (g.vehicle_type) setVehicle(g.vehicle_type); };
+  const removeGuest = async (g: any) => { try { await apiFetch(`/company/guests/${g.id}`, { method: "DELETE" }, token); setGuests((l) => l.filter((x) => x.id !== g.id)); } catch {} };
 
   useEffect(() => {
     if (!pickup || !dropoff) { setOptions([]); return; }
@@ -74,6 +79,20 @@ export default function PartnerBookingForm({ visible, onClose, onCreated, discou
         </View>
       ) : (
         <>
+          {guests.length > 0 && (
+            <View testID="saved-guests">
+              <Text style={styles.label}>Clients enregistrés</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                {guests.map((g) => (
+                  <Pressable key={g.id} testID={`guest-chip-${g.id}`} onPress={() => prefill(g)} style={styles.guestChip}>
+                    <Icon name="account-star-outline" size={16} color={theme.color.onSurface} />
+                    <View><Text style={styles.guestChipName} numberOfLines={1}>{g.name}</Text>{g.room ? <Text style={styles.guestChipMeta}>ch. {g.room}</Text> : null}</View>
+                    <Pressable testID={`guest-del-${g.id}`} onPress={() => removeGuest(g)} hitSlop={8}><Icon name="close" size={14} color={theme.color.onSurfaceTertiary} /></Pressable>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
           <Field testID="guest-name" label="Client (nom affiché au chauffeur)" value={guest} onChangeText={setGuest} placeholder="M. Smith" autoCapitalize="words" />
           <View style={styles.row2}>
             <View style={{ flex: 2, minWidth: 160 }}><Field testID="guest-phone" label="Téléphone (SMS de suivi)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+44 7…" /></View>
@@ -134,6 +153,8 @@ const styles = StyleSheet.create({
   addr: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, minHeight: 52, marginBottom: theme.spacing.sm },
   addrText: { flex: 1, fontSize: 14, color: theme.color.onSurface },
   hint: { fontSize: 13, color: theme.color.onSurfaceTertiary },
+  guestChip: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: 8, maxWidth: 200 },
+  guestChipName: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface, maxWidth: 120 }, guestChipMeta: { fontSize: 10, color: theme.color.onSurfaceTertiary },
   veh: { minWidth: 120, padding: theme.spacing.md, borderRadius: theme.radius.md, borderWidth: 1.5, borderColor: theme.color.border, backgroundColor: theme.color.surface },
   vehActive: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
   vehName: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface }, vehPrice: { fontSize: 16, fontWeight: "800", color: theme.color.onSurface, marginTop: 4 }, vehFixed: { fontSize: 10, fontWeight: "700", color: theme.color.success, marginTop: 2 },

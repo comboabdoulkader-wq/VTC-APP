@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from core import (JWT_SECRET, MODERATOR_EMAILS, client_ip, current_user, db, hash_password, make_token, new_id, normalize_phone, now_utc,
+from core import (JWT_SECRET, MODERATOR_EMAILS, client_ip, current_user, db, hash_password, make_token, new_id, normalize_phone, notify, now_utc,
                   rate_limit, send_sms, sms_configured, verify_password)
 from models import (GoogleSessionIn, ForgotPasswordIn, LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, ResetPasswordIn, TokenOut,
                     UserOut)
@@ -64,6 +64,7 @@ async def register(data: RegisterIn, request: Request):
         lead = await db.partner_leads.find_one({"phone": phone}, {"_id": 0, "sponsor_id": 1})
         if lead and lead.get("sponsor_id"):
             user["sponsor_id"] = lead["sponsor_id"]
+            user["sponsor_from_partner"] = True
     if data.role == "driver":
         user["docs_blocked"] = True  # no documents yet → cannot work until mandatory documents are uploaded
     if data.role == "company":
@@ -75,6 +76,9 @@ async def register(data: RegisterIn, request: Request):
         # Hotels, concierges and agencies get the partner rate on guest bookings
         user["partner_discount"] = float(os.environ.get("PARTNER_DISCOUNT", "0.10")) if data.partner_type != "company" else 0.0
     await db.users.insert_one(user.copy())
+    if user.pop("sponsor_from_partner", False) and user.get("sponsor_id"):
+        await notify(user["sponsor_id"], "referral", "Nouveau filleul",
+                     f"{user['full_name']} a créé son compte et a rejoint votre réseau. Vous gagnerez des commissions sur ses courses.")
     user["is_moderator"] = email in MODERATOR_EMAILS
     return TokenOut(access_token=make_token(user), user=user_to_out(user))
 

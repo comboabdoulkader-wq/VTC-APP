@@ -399,6 +399,15 @@ class PayoutDecisionIn(BaseModel):
     note: Optional[str] = Field(default=None, max_length=300)
 
 
+class GuestIn(BaseModel):
+    """A partner's regular client with saved preferences to pre-fill bookings."""
+    name: str = Field(min_length=1, max_length=80)
+    phone: Optional[str] = Field(default=None, max_length=30)
+    room: Optional[str] = Field(default=None, max_length=20)
+    notes: Optional[str] = Field(default=None, max_length=300)
+    vehicle_type: Optional[VehicleType] = None
+
+
 # ---- Cities (moderation) ----
 class CityIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)

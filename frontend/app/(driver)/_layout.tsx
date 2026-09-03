@@ -24,7 +24,7 @@ export default function DriverLayout() {
         <Tabs.Screen name="team" options={{ title: t("tab_team"), tabBarIcon: ({ color, size }) => <Icon name="account-group-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="documents" options={{ title: t("tab_documents"), tabBarIcon: ({ color, size }) => <Icon name="file-check-outline" size={size} color={color} /> }} />
         <Tabs.Screen name="earnings" options={{ title: t("tab_earnings"), tabBarIcon: ({ color, size }) => <Icon name="wallet-outline" size={size} color={color} /> }} />
-        <Tabs.Screen name="profile" options={{ title: t("tab_profile"), tabBarIcon: ({ color, size }) => <Icon name="account" size={size} color={color} /> }} />
+        <Tabs.Screen name="profile" options={{ title: t("tab_profile"), tabBarButtonTestID: "tab-profile", tabBarIcon: ({ color, size }) => <Icon name="account" size={size} color={color} /> }} />
       </Tabs>
       <NotificationsBanner role="driver" />
     </View>

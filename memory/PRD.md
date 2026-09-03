@@ -140,3 +140,10 @@ See /app/memory/test_credentials.md
 - Versements Admin: payouts now db.payouts {status pending|paid|rejected}. POST /company/wallet/payout debits (hold) + pending request. Moderator GET /company/admin/payouts?status=, PATCH /company/admin/payouts/{id} {status,note} (rejected → refund wallet payout_refund; re-decide → 409). UI PayoutsAdmin sheet in driver/passenger/company profiles (open-payouts-admin).
 - Relevé automatique: server.py statements_loop (daily) → company.monthly_statement_sweep() emails each partner the previous month's statement at month start (idempotent via users.last_statement_month), signed public PDF GET /company/commission-statements/{id}.pdf?month=&sig= (emailer.send_partner_statement).
 - Classement Partenaires: GET /company/ranking (rank, total_partners, commissioned_partners, my_total, leaderboard[], best_months[]) → ranking card (comm-ranking) in the commissions sheet.
+
+## Iteration 21 – Export compta, badges fidélité, alerte filleul, notes clients (DONE, tested 13/13 backend + UI)
+- Export Comptable: moderator GET /company/admin/payouts/export.csv|pdf (?token=, optional status=&month=), reports.build_payouts_csv/pdf; UI export buttons in PayoutsAdmin (payouts-export-csv/pdf).
+- Badges Fidélité: referral.PARTNER_TIERS (bronze 5% / argent≥20 6% / or≥50 7% / platine≥100 8% by completed partner bookings); distribute_partner_commission uses the tier rate; /company/partner & /company/commissions return `tier`; UI badge card (comm-tier) with progress bar in PartnerCommissions.
+- Alerte Nouveau Filleul: auth.register links sponsor_id from partner_leads AND notifies the partner ("Nouveau filleul").
+- Notes Clients: db.partner_guests upserted on each partner booking + GET/POST/DELETE /company/guests; PartnerBookingForm quick-pick "Clients enregistrés" (guest-chip-{id} prefills, guest-del-{id} removes).
+- Added tabBarButtonTestID to (company)/(driver)/(passenger) tab layouts (tab-company, tab-clients, tab-profile, …) for testability.

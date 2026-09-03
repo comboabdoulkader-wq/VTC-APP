@@ -11,8 +11,9 @@ import SheetModal from "@/src/components/ui/SheetModal";
 const API = process.env.EXPO_PUBLIC_BACKEND_URL;
 const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
+type Tier = { completed_bookings: number; tier: string; tier_label: string; tier_icon: string; rate: number; next_tier_label: string | null; next_tier_rate: number | null; next_tier_min: number | null; to_next: number };
 type Line = { id: string; type: string; label: string; amount: number; created_at: string };
-type Data = { month: string; label: string; rate: number; balance: number; earned: number; direct: number; network: number; count: number; lines: Line[]; payouts: Line[] };
+type Data = { month: string; label: string; rate: number; tier?: Tier; balance: number; earned: number; direct: number; network: number; count: number; lines: Line[]; payouts: Line[] };
 type Ranking = { rank: number; total_partners: number; commissioned_partners: number; my_total: number; leaderboard: { position: number; is_me: boolean; name: string; total: number; count: number }[]; best_months: { month: string; label: string; total: number; count: number }[] };
 
 const ORIGIN: Record<string, { label: string; icon: string }> = {
@@ -78,6 +79,25 @@ export default function PartnerCommissions({ visible, onClose }: { visible: bool
         <Text style={styles.heroValue} testID="comm-balance">{money(data?.balance)}</Text>
         <Text style={styles.heroHint}>Vous gagnez {Math.round((data?.rate ?? 0.05) * 100)} % sur chaque course de vos clients, crédités ici automatiquement.</Text>
       </View>
+
+      {data?.tier && (
+        <View style={styles.tierCard} testID="comm-tier">
+          <View style={styles.tierRow}>
+            <Icon name={data.tier.tier_icon as any} size={22} color="#E8B84B" />
+            <Text style={styles.tierTitle}>Badge {data.tier.tier_label}</Text>
+            <View style={styles.tierRatePill}><Text style={styles.tierRateText}>{Math.round(data.tier.rate * 100)} %</Text></View>
+          </View>
+          <Text style={styles.tierMeta}>{data.tier.completed_bookings} course(s) client terminée(s)</Text>
+          {data.tier.next_tier_label ? (
+            <>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${Math.min(100, Math.round((data.tier.completed_bookings / (data.tier.next_tier_min || 1)) * 100))}%` }]} />
+              </View>
+              <Text style={styles.tierHint}>Plus que {data.tier.to_next} course(s) pour atteindre <Text style={{ fontWeight: "800", color: theme.color.onSurface }}>{data.tier.next_tier_label}</Text> et gagner {Math.round((data.tier.next_tier_rate || 0) * 100)} % 🎯</Text>
+            </>
+          ) : <Text style={styles.tierHint}>Niveau maximum atteint — merci pour votre fidélité 🎉</Text>}
+        </View>
+      )}
 
       {ranking && ranking.my_total > 0 && (
         <View style={styles.rankCard} testID="comm-ranking">
@@ -159,6 +179,15 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 12, color: "rgba(255,255,255,0.7)" },
   heroValue: { fontSize: 34, fontWeight: "800", color: "#fff", letterSpacing: -1, marginTop: 2 },
   heroHint: { fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 17 },
+  tierCard: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.lg, marginBottom: theme.spacing.lg },
+  tierRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  tierTitle: { flex: 1, fontSize: 15, fontWeight: "800", color: theme.color.onSurface },
+  tierRatePill: { backgroundColor: theme.color.brand, borderRadius: theme.radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
+  tierRateText: { color: theme.color.onBrand, fontSize: 13, fontWeight: "800" },
+  tierMeta: { fontSize: 12, color: theme.color.onSurfaceTertiary, marginTop: 4 },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: theme.color.surface, marginTop: theme.spacing.md, overflow: "hidden" },
+  progressFill: { height: 8, borderRadius: 4, backgroundColor: "#E8B84B" },
+  tierHint: { fontSize: 12, color: theme.color.onSurfaceSecondary, marginTop: theme.spacing.sm, lineHeight: 16 },
   rankCard: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.lg, marginBottom: theme.spacing.lg, borderWidth: 1, borderColor: "#E8B84B33" },
   rankRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   rankTitle: { fontSize: 14, fontWeight: "800", color: theme.color.onSurface },

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 21 - Backend 13/13 PASS covering the 4 new features (Export Comptable, Badges Fidélité, Alerte Nouveau Filleul, Notes Clients). Frontend testIDs on the 4 feature surfaces (open-payouts-admin, payouts-export-csv, payouts-export-pdf, open-commissions, comm-tier, partner-new, saved-guests, guest-chip-<id>, guest-name) are all present in source. Programmatic UI walkthrough was blocked because the bottom tab-bar (Dashboard/Clients/Employees/Company for hotel; Home/Private/Team/Documents/Earnings/Profile for driver) exposes no data-testid, so I could not navigate to Profile / Company / Clients reliably via Playwright. Reporting per loop-prevention rule after 3 attempts.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bottom tab bar (driver + company shells)", "issues": [
+        "Bottom-nav tab buttons have no testID (Dashboard/Clients/Employees/Company on hotel, Home/Private/Team/Documents/Earnings/Profile on driver). This blocks Playwright navigation and prevented the reviewer from reaching the 3 UI acceptance criteria (open-payouts-admin, open-commissions/comm-tier, partner-new→saved-guests). Add e.g. testID='tab-company', 'tab-clients', 'tab-profile' on each tab button."
+      ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21.py",
+    "/app/test_reports/pytest/iteration21.xml"
+  ],
+  "action_items": [
+    "Add testID props to the bottom TabBar buttons (both driver shell and company shell) so UI navigation is testable. Suggested: tab-driver-home, tab-driver-private, tab-driver-team, tab-driver-documents, tab-driver-earnings, tab-profile, tab-company-dashboard, tab-company-clients, tab-company-employees, tab-company.",
+    "Once tabs have testIDs, main agent can self-verify the 3 UI flows (moderator payout export sheet, comm-tier card, saved-guests chip prefilling guest-name). All feature-level testIDs already exist in source, so no other change is needed for testability.",
+    "Optional consistency: frontend uses process.env.EXPO_PUBLIC_BACKEND_URL while the platform contract calls for EXPO_BACKEND_URL. Both env keys exist historically but standardising would avoid confusion in future audits (not a bug, code works)."
+  ],
+  "critical_code_review_comments": [
+    "routes/company.py is ~490 lines and mixes 6 concerns (join/leave, employees, exports, partner bookings, commissions/payouts, saved-guests). Consider splitting into modules (company_business.py, company_partner.py, company_admin.py, company_guests.py).",
+    "PartnerBookingForm.tsx useEffect on line 32 has [visible] dep-array but references token/setGuests without listing them; React would warn. Not a functional bug (fine because tokens don't change).",
+    "test_iteration21.py::TestAlerteNouveauFilleul uses direct Motor DB access + requests: works, but a request-only assertion (e.g. checking sponsor_id via /auth/me after applying a code) would be more portable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21.py (new)",
+    "/app/test_reports/pytest/iteration21.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "not verified (blocked by missing tab testIDs; loop-prevention stop)"},
+  "seed_data_creation": "Test creates and cleans one TEST_Guest_*, one TEST_Booked_* guest (auto-deleted). One partner_lead + one new passenger 'Filleul Test' account created per run (small leftover in DB but harmless).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend feature parity fully verified with tests/test_iteration21.py. To test UI: after main agent adds testIDs on the bottom nav, follow these deep-links: (driver login) tab-profile → open-payouts-admin → payouts-export-csv / payouts-export-pdf; (hotel login) tab-company → open-commissions → comm-tier; (hotel login) tab-clients → partner-new → saved-guests → guest-chip-<id> then read guest-name value. All feature-level testIDs are already in the components (see PayoutsAdmin.tsx, PartnerCommissions.tsx, PartnerBookingForm.tsx).",
+  "rca_of_issue": "N/A - no functional bug found. Only UI-testability gap: absence of testID on bottom-tab buttons prevented Playwright navigation."
+}
