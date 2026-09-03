@@ -4,8 +4,10 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 
 export default function Welcome() {
+  const { t } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -25,15 +27,15 @@ export default function Welcome() {
           <Text style={styles.brand} testID="brand-title">RideGo</Text>
         </View>
         <View>
-          <Text style={styles.headline}>Votre course{"\n"}à portée de main.</Text>
-          <Text style={styles.subtitle}>Réservez, suivez et payez vos trajets en toute simplicité.</Text>
+          <Text style={styles.headline}>{t("welcome_title")}</Text>
+          <Text style={styles.subtitle}>{t("welcome_subtitle")}</Text>
 
           <Pressable
             testID="cta-login"
             style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }]}
             onPress={() => router.push("/(auth)/login")}
           >
-            <Text style={styles.primaryText}>Se connecter</Text>
+            <Text style={styles.primaryText}>{t("login")}</Text>
           </Pressable>
 
           <Pressable
@@ -41,7 +43,7 @@ export default function Welcome() {
             style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}
             onPress={() => router.push("/(auth)/register")}
           >
-            <Text style={styles.secondaryText}>Créer un compte</Text>
+            <Text style={styles.secondaryText}>{t("register")}</Text>
           </Pressable>
         </View>
       </View>

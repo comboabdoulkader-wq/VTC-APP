@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { POPULAR_PLACES, DEFAULT_PICKUP, Place } from "@/src/data/places";
 import { apiFetch, useAuth } from "@/src/context/auth";
@@ -79,6 +80,7 @@ export default function PassengerHome() {
   const currentService = services.find((s) => s.key === service) || null;
   const minHours = currentService?.pricing === "hourly" ? currentService.min_hours : 0;
   const gps = useMyPosition();
+  const { t, lang } = useI18n();
   const [favorites, setFavorites] = useState<(Place & { label: string; icon: string })[]>([]);
   const [saveFav, setSaveFav] = useState<Place | null>(null);
   const [favLabel, setFavLabel] = useState("Maison");
@@ -102,8 +104,8 @@ export default function PassengerHome() {
 
   useEffect(() => {
     apiFetch<{ card_enabled: boolean }>("/payments/config").then((c) => setCardEnabled(c.card_enabled)).catch(() => {});
-    apiFetch<any>("/catalog").then((c) => { setServices(c.services); setFlightTracking(!!c.flight_tracking); setCancelPolicy(c.cancellation_policy?.text || ""); }).catch(() => {});
-  }, []);
+    apiFetch<any>(`/catalog?lang=${lang}`).then((c) => { setServices(c.services); setFlightTracking(!!c.flight_tracking); setCancelPolicy(c.cancellation_policy?.text || ""); }).catch(() => {});
+  }, [lang]);
 
   // "Réserver à nouveau": prefill pickup/dropoff/service/details from a past ride
   useEffect(() => {
@@ -287,7 +289,7 @@ export default function PassengerHome() {
         ) : !dropoff || searchMode === "pickup" ? (
           <BottomSheetView style={[styles.sheetContent, { flex: 1, paddingBottom: insets.bottom + theme.spacing.lg }]}>
             <View style={styles.rowBetween}>
-              <Text style={styles.sheetTitle}>{searchMode === "pickup" ? "Point de départ" : "Où allez-vous ?"}</Text>
+              <Text style={styles.sheetTitle}>{searchMode === "pickup" ? t("pickup_point") : t("where_to")}</Text>
               {searchMode === "pickup" && (
                 <Pressable testID="pickup-cancel" onPress={() => setSearchMode("dropoff")} hitSlop={10}><Icon name="close" size={22} color={theme.color.onSurfaceSecondary} /></Pressable>
               )}
@@ -311,7 +313,7 @@ export default function PassengerHome() {
             <View style={styles.searchWrap}>
               {searching ? <ActivityIndicator size="small" color={theme.color.onSurfaceTertiary} /> : <Icon name="magnify" size={20} color={theme.color.onSurfaceTertiary} />}
               <SheetInput testID="destination-search" value={query} onChangeText={setQuery}
-                placeholder={searchMode === "pickup" ? "Adresse de départ (monde entier)" : "Rechercher une adresse, une ville…"}
+                placeholder={searchMode === "pickup" ? t("pickup_point") : t("search_placeholder")}
                 placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.searchInput} onFocus={() => sheetRef.current?.snapToIndex(2)} />
             </View>
             <FlatList data={results} keyExtractor={(item) => item.id} keyboardShouldPersistTaps="handled"
@@ -336,10 +338,10 @@ export default function PassengerHome() {
             <View style={styles.trip}>
               <Icon name="dots-vertical" size={22} color={theme.color.onSurfaceTertiary} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.tripLabel}>Départ</Text>
+                <Text style={styles.tripLabel}>{t("departure")}</Text>
                 <Text style={styles.tripAddr} numberOfLines={1}>{pickup.name}</Text>
                 <View style={styles.tripDivider} />
-                <Text style={styles.tripLabel}>Arrivée</Text>
+                <Text style={styles.tripLabel}>{t("arrival")}</Text>
                 <Text style={styles.tripAddr} numberOfLines={1}>{dropoff.name}</Text>
               </View>
               <Pressable testID="reset-dropoff" onPress={reset} hitSlop={8}><Icon name="close" size={22} color={theme.color.onSurfaceSecondary} /></Pressable>
@@ -350,8 +352,8 @@ export default function PassengerHome() {
             )}
             <TripDetails value={trip} onChange={setTrip} service={currentService} flightTracking={flightTracking} />
 
-            <Text style={styles.sectionTitle}>Choisissez votre véhicule</Text>
-            {estimates[0]?.fixed_route_name ? <Text style={styles.fixedRoute} testID="fixed-route-name">✓ Trajet à prix fixe : {estimates[0].fixed_route_name}</Text> : null}
+            <Text style={styles.sectionTitle}>{t("choose_vehicle")}</Text>
+            {estimates[0]?.fixed_route_name ? <Text style={styles.fixedRoute} testID="fixed-route-name">✓ {t("fixed_route", { name: estimates[0].fixed_route_name })}</Text> : null}
             {loadingEstimate ? <ActivityIndicator style={{ marginVertical: 30 }} color={theme.color.onSurface} /> : (
               <View style={{ gap: theme.spacing.sm }}>
                 {estimates.map((e) => (
@@ -369,7 +371,7 @@ export default function PassengerHome() {
               style={({ pressed }) => [styles.confirmBtn, (!selected || confirming) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}>
               {confirming ? <ActivityIndicator color="#fff" /> : (
                 <Text style={styles.confirmText}>
-                  {options.scheduledAt ? "Programmer" : "Commander"} {selected ? `• ${money(Math.max(Math.max(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0) - (options.promoCode ? options.discount : 0), 0) - (options.useWallet && !options.business ? walletBalance : 0), 0))}` : ""}
+                  {options.scheduledAt ? t("schedule") : t("book")} {selected ? `• ${money(Math.max(Math.max(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0) - (options.promoCode ? options.discount : 0), 0) - (options.useWallet && !options.business ? walletBalance : 0), 0))}` : ""}
                 </Text>
               )}
             </Pressable>

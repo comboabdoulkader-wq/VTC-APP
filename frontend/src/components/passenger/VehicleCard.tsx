@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Image } from "react-native";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { money, VEHICLE_ICON } from "@/src/utils/format";
 
 export type VehicleOption = {
@@ -14,6 +15,7 @@ export type VehicleOption = {
 /** Vehicle card: photo, capacity (passengers / luggage), category, price with fixed-price badge. */
 export default function VehicleCard({ option, active, hours, onPress }: { option: VehicleOption; active: boolean; hours: number; onPress: () => void }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const { t } = useI18n();
   const fits = option.fits !== false;
   return (
     <Pressable testID={`vehicle-${option.vehicle_type}`} onPress={onPress} disabled={!fits} style={[styles.card, active && styles.cardActive, !fits && styles.cardDisabled]} accessibilityState={{ selected: active, disabled: !fits }}>
@@ -32,21 +34,21 @@ export default function VehicleCard({ option, active, hours, onPress }: { option
         <View style={styles.capRow}>
           <Icon name="account-multiple" size={14} color={theme.color.onSurfaceSecondary} /><Text style={styles.cap}>{option.passengers ?? 3}</Text>
           <Icon name="bag-suitcase" size={14} color={theme.color.onSurfaceSecondary} style={{ marginLeft: 6 }} /><Text style={styles.cap}>{option.luggage ?? 3}</Text>
-          <Text style={styles.meta}> · {hours ? `${hours} h à disposition` : `${option.eta_min} min · ${option.duration_min} min · ${option.distance_km.toFixed(1)} km`}</Text>
+          <Text style={styles.meta}> · {hours ? t("hours_available", { h: hours }) : `${t("wait_min", { m: option.eta_min })} · ${option.duration_min} min · ${option.distance_km.toFixed(1)} km`}</Text>
         </View>
         {!fits ? (
-          <Text style={styles.noFit} testID={`vehicle-${option.vehicle_type}-nofit`}>Capacité insuffisante pour votre groupe</Text>
+          <Text style={styles.noFit} testID={`vehicle-${option.vehicle_type}-nofit`}>{t("not_fit")}</Text>
         ) : option.fixed_price ? (
-          <View style={styles.badge} testID={`vehicle-${option.vehicle_type}-fixed`}><Icon name="lock-check-outline" size={12} color={theme.color.success} /><Text style={styles.badgeText}>Prix fixe — sans frais cachés</Text></View>
+          <View style={styles.badge} testID={`vehicle-${option.vehicle_type}-fixed`}><Icon name="lock-check-outline" size={12} color={theme.color.success} /><Text style={styles.badgeText}>{t("fixed_price")}</Text></View>
         ) : option.hourly_rate ? (
-          <Text style={styles.desc}>{money(option.hourly_rate)} / heure</Text>
+          <Text style={styles.desc}>{money(option.hourly_rate)} {t("per_hour")}</Text>
         ) : option.description ? (
           <Text style={styles.desc} numberOfLines={1}>{option.description}</Text>
         ) : null}
       </View>
       <View style={{ alignItems: "flex-end" }}>
         <Text style={styles.price}>{money(option.price)}</Text>
-        <Text style={styles.taxes}>TTC</Text>
+        <Text style={styles.taxes}>{t("taxes_incl")}</Text>
       </View>
     </Pressable>
   );

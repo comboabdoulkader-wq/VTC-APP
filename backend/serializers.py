@@ -12,6 +12,7 @@ def user_to_out(u: dict, **extra) -> UserOut:
         phone=u.get("phone"),
         phone_verified=bool(u.get("phone_verified")),
         sms_enabled=u.get("sms_enabled", True),
+        language=u.get("language", "fr"),
         vehicle_model=u.get("vehicle_model"),
         license_plate=u.get("license_plate"),
         rating=u.get("rating", 5.0),

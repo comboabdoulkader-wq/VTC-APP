@@ -99,6 +99,8 @@ async def update_me(data: ProfileUpdateIn, user=Depends(current_user)):
         update["full_name"] = data.full_name.strip()
     if data.sms_enabled is not None:
         update["sms_enabled"] = data.sms_enabled
+    if data.language is not None:
+        update["language"] = data.language
     if user["role"] == "driver":
         if data.vehicle_model is not None:
             update["vehicle_model"] = data.vehicle_model.strip()

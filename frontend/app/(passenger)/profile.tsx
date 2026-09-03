@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
@@ -13,11 +14,15 @@ import CompanyJoinCard from "@/src/components/CompanyJoinCard";
 import WalletCard from "@/src/components/WalletCard";
 import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
 import AccountSection from "@/src/components/AccountSection";
+import LanguagePicker from "@/src/components/LanguagePicker";
+import CatalogAdmin from "@/src/components/admin/CatalogAdmin";
 
 export default function Profile() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [showCatalog, setShowCatalog] = useState(false);
   const [showCities, setShowCities] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
@@ -60,6 +65,7 @@ export default function Profile() {
 
       <WalletCard />
       <PhoneVerifyCard />
+      <LanguagePicker />
       <AccountSection />
 
       <CompanyJoinCard />
@@ -89,9 +95,19 @@ export default function Profile() {
       )}
       <CitiesModeration visible={showCities} onClose={() => setShowCities(false)} />
 
+{user.is_moderator && (
+        <Pressable testID="open-catalog-admin" onPress={() => setShowCatalog(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+          <Icon name="cash-multiple" size={22} color={theme.color.onSurface} />
+          <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Grille tarifaire & photos véhicules</Text>
+          <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+        </Pressable>
+      )}
+      <CatalogAdmin visible={showCatalog} onClose={() => setShowCatalog(false)} />
+
+
 <Pressable testID="logout-button" style={styles.logout} onPress={doLogout}>
         <Icon name="logout" size={20} color={theme.color.error} />
-        <Text style={styles.logoutText}>Se déconnecter</Text>
+        <Text style={styles.logoutText}>{t("logout")}</Text>
       </Pressable>
     </ScrollView>
   );

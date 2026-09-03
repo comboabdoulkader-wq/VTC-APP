@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { useAuth, homeFor } from "@/src/context/auth";
 
 export default function Login() {
@@ -16,6 +17,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -43,11 +45,11 @@ export default function Login() {
           <Icon name="chevron-left" size={28} color={theme.color.onSurface} />
         </Pressable>
 
-        <Text style={styles.title}>Bon retour</Text>
-        <Text style={styles.subtitle}>Connectez-vous pour continuer</Text>
+        <Text style={styles.title}>{t("welcome_back")}</Text>
+        <Text style={styles.subtitle}>{t("login_subtitle")}</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>{t("email")}</Text>
           <TextInput
             testID="email-input"
             value={email}
@@ -61,7 +63,7 @@ export default function Login() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Mot de passe</Text>
+          <Text style={styles.label}>{t("password")}</Text>
           <View style={styles.pwdRow}>
             <TextInput
               testID="password-input"
@@ -84,7 +86,7 @@ export default function Login() {
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
 
         <Pressable testID="forgot-password" onPress={() => router.push("/(auth)/forgot-password" as any)} style={styles.forgot} hitSlop={8}>
-          <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+          <Text style={styles.forgotText}>{t("forgot_password")}</Text>
         </Pressable>
 
         <Pressable
@@ -93,11 +95,11 @@ export default function Login() {
           disabled={loading}
           style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }, loading && { opacity: 0.7 }]}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Se connecter</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t("login")}</Text>}
         </Pressable>
 
         <Pressable testID="go-to-register" onPress={() => router.replace("/(auth)/register")}>
-          <Text style={styles.link}>Pas encore de compte ? <Text style={{ fontWeight: "700" }}>Créer un compte</Text></Text>
+          <Text style={styles.link}>{t("no_account")} <Text style={{ fontWeight: "700" }}>{t("register")}</Text></Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

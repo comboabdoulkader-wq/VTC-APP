@@ -4,6 +4,7 @@ import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import type { Service } from "@/src/components/passenger/ServicePicker";
 
 export type TripDetailsValue = { passengers: number; children: number; childSeats: number; luggage: number; hours: number; flightNumber: string; airline: string };
@@ -15,28 +16,29 @@ type Props = { value: TripDetailsValue; onChange: (v: TripDetailsValue) => void;
 /** Passengers / children / child seats / luggage steppers, hours for hourly services, flight for airport transfers. */
 export default function TripDetails({ value, onChange, service, flightTracking }: Props) {
   const set = (patch: Partial<TripDetailsValue>) => onChange({ ...value, ...patch });
+  const { t } = useI18n();
   const hourly = service?.pricing === "hourly";
   const airport = service?.key === "airport";
   const minHours = service?.min_hours || 2;
 
   return (
     <View style={styles.card} testID="trip-details">
-      <Text style={styles.title}>Détails du trajet</Text>
-      <Stepper testID="pax" icon="account" label="Adultes" value={value.passengers} min={1} max={16} onChange={(n) => set({ passengers: n })} />
-      <Stepper testID="children" icon="human-child" label="Enfants" value={value.children} min={0} max={10} onChange={(n) => set({ children: n, childSeats: Math.min(value.childSeats, n) })} />
-      {value.children > 0 && <Stepper testID="seats" icon="car-child-seat" label="Sièges bébé / enfant" value={value.childSeats} min={0} max={Math.min(4, value.children)} onChange={(n) => set({ childSeats: n })} />}
-      <Stepper testID="luggage" icon="bag-suitcase" label="Bagages" value={value.luggage} min={0} max={20} onChange={(n) => set({ luggage: n })} last={!hourly && !airport} />
+      <Text style={styles.title}>{t("trip_details")}</Text>
+      <Stepper testID="pax" icon="account" label={t("adults")} value={value.passengers} min={1} max={16} onChange={(n) => set({ passengers: n })} />
+      <Stepper testID="children" icon="human-child" label={t("children")} value={value.children} min={0} max={10} onChange={(n) => set({ children: n, childSeats: Math.min(value.childSeats, n) })} />
+      {value.children > 0 && <Stepper testID="seats" icon="car-child-seat" label={t("child_seats")} value={value.childSeats} min={0} max={Math.min(4, value.children)} onChange={(n) => set({ childSeats: n })} />}
+      <Stepper testID="luggage" icon="bag-suitcase" label={t("luggage")} value={value.luggage} min={0} max={20} onChange={(n) => set({ luggage: n })} last={!hourly && !airport} />
 
       {hourly && (
-        <Stepper testID="hours" icon="clock-outline" label={`Durée (min. ${minHours} h)`} value={Math.max(value.hours, minHours)} min={minHours} max={24} suffix=" h" onChange={(n) => set({ hours: n })} last />
+        <Stepper testID="hours" icon="clock-outline" label={t("duration_min", { h: minHours })} value={Math.max(value.hours, minHours)} min={minHours} max={24} suffix=" h" onChange={(n) => set({ hours: n })} last />
       )}
 
       {airport && (
         <View style={styles.flightBox} testID="flight-box">
           <View style={styles.flightHead}>
             <Icon name="airplane-landing" size={18} color={theme.color.onSurface} />
-            <Text style={styles.flightTitle}>Votre vol</Text>
-            <Text style={styles.flightHint}>{flightTracking ? "Suivi en temps réel" : "Saisie manuelle"}</Text>
+            <Text style={styles.flightTitle}>{t("your_flight")}</Text>
+            <Text style={styles.flightHint}>{flightTracking ? t("live_tracking") : t("manual_entry")}</Text>
           </View>
           <View style={styles.flightRow}>
             <SheetInput
@@ -44,7 +46,7 @@ export default function TripDetails({ value, onChange, service, flightTracking }
               value={value.flightNumber}
               onChangeText={(t: string) => set({ flightNumber: t.toUpperCase().replace(/[^A-Z0-9 ]/g, "").slice(0, 8) })}
               autoCapitalize="characters"
-              placeholder="N° de vol (AF1234)"
+              placeholder={t("flight_number")}
               placeholderTextColor={theme.color.onSurfaceTertiary}
               style={[styles.input, { flex: 1 }]}
             />
@@ -52,15 +54,13 @@ export default function TripDetails({ value, onChange, service, flightTracking }
               testID="airline"
               value={value.airline}
               onChangeText={(t: string) => set({ airline: t.slice(0, 40) })}
-              placeholder="Compagnie"
+              placeholder={t("airline")}
               placeholderTextColor={theme.color.onSurfaceTertiary}
               style={[styles.input, { flex: 1 }]}
             />
           </View>
           <Text style={styles.flightNote}>
-            {flightTracking
-              ? "Votre chauffeur suit votre vol : en cas de retard, la prise en charge est décalée automatiquement."
-              : "Indiquez votre vol : le chauffeur en est informé et adapte la prise en charge."}
+            {flightTracking ? t("flight_note_tracking") : t("flight_note_manual")}
           </Text>
         </View>
       )}

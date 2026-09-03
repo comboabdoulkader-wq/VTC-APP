@@ -10,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/context/auth";
 import PushRegistrar from "@/src/components/PushRegistrar";
+import { I18nProvider } from "@/src/i18n";
 import { theme } from "@/src/theme";
 import { getNotifications } from "@/src/utils/push";
 
@@ -96,12 +97,14 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={[styles.root, framed && styles.rootFramed]}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <PushRegistrar />
-          <View style={[styles.frame, framed && styles.frameWide]}>
-            <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
-          </View>
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <PushRegistrar />
+            <View style={[styles.frame, framed && styles.frameWide]}>
+              <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+            </View>
+          </AuthProvider>
+        </I18nProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

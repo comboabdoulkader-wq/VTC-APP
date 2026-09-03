@@ -1,19 +1,24 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import AccountSettings from "@/src/components/AccountSettings";
+import HelpCenter from "@/src/components/HelpCenter";
+import { useI18n } from "@/src/i18n";
 
 /** "Mon compte" menu shared by all profile screens: personal info, security (password), help. */
 export default function AccountSection() {
   const [section, setSection] = useState<"info" | "security" | null>(null);
+  const [help, setHelp] = useState(false);
+  const { t } = useI18n();
   return (
     <View style={styles.group} testID="account-section">
-      <Row testID="menu-info" icon="account-edit-outline" label="Informations personnelles" onPress={() => setSection("info")} />
-      <Row testID="menu-security" icon="shield-lock-outline" label="Sécurité" hint="Mot de passe" onPress={() => setSection("security")} />
-      <Row testID="menu-help" icon="help-circle-outline" label="Aide" last onPress={() => Alert.alert("Aide", "Besoin d'assistance ? Écrivez-nous à support@ridego.app — nous répondons sous 24 h.")} />
+      <Row testID="menu-info" icon="account-edit-outline" label={t("personal_info")} onPress={() => setSection("info")} />
+      <Row testID="menu-security" icon="shield-lock-outline" label={t("security")} hint={t("password")} onPress={() => setSection("security")} />
+      <Row testID="menu-help" icon="help-circle-outline" label={t("help")} last onPress={() => setHelp(true)} />
       <AccountSettings visible={section !== null} section={section || "info"} onClose={() => setSection(null)} />
+      <HelpCenter visible={help} onClose={() => setHelp(false)} />
     </View>
   );
 }

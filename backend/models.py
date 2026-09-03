@@ -35,6 +35,7 @@ class ProfileUpdateIn(BaseModel):
     full_name: Optional[str] = Field(default=None, min_length=1, max_length=80)
     phone: Optional[str] = Field(default=None, max_length=30)
     sms_enabled: Optional[bool] = None
+    language: Optional[str] = Field(default=None, pattern="^(fr|en|es|ar|zh|pt)$")
     vehicle_model: Optional[str] = Field(default=None, max_length=60)
     license_plate: Optional[str] = Field(default=None, max_length=20)
 
@@ -70,6 +71,7 @@ class UserOut(BaseModel):
     phone: Optional[str] = None
     phone_verified: bool = False
     sms_enabled: bool = True
+    language: str = "fr"
     vehicle_model: Optional[str] = None
     license_plate: Optional[str] = None
     rating: float = 5.0

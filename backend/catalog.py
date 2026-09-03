@@ -52,6 +52,37 @@ SERVICES = {
                 "description": "Mariages, cérémonies, anniversaires – véhicule décoré sur demande"},
 }
 
+# Service labels in the 6 supported languages (fr is the default `label`)
+SERVICE_LABELS = {
+    "private": {"en": "Private Driver", "es": "Chófer privado", "ar": "سائق خاص", "zh": "私人司机", "pt": "Motorista particular"},
+    "airport": {"en": "Airport Transfer", "es": "Traslado aeropuerto", "ar": "نقل من/إلى المطار", "zh": "机场接送", "pt": "Transfer aeroporto"},
+    "hourly": {"en": "Hourly Chauffeur", "es": "Chófer por horas", "ar": "سائق بالساعة", "zh": "包时司机", "pt": "Motorista por hora"},
+    "business": {"en": "Business Travel", "es": "Viaje de negocios", "ar": "رحلات عمل", "zh": "商务出行", "pt": "Viagem de negócios"},
+    "city_tour": {"en": "City Tour", "es": "Tour por París", "ar": "جولة في باريس", "zh": "巴黎城市观光", "pt": "Tour por Paris"},
+    "events": {"en": "Events", "es": "Eventos y ferias", "ar": "فعاليات ومعارض", "zh": "活动与展会", "pt": "Eventos e feiras"},
+    "long_distance": {"en": "Long Distance", "es": "Larga distancia", "ar": "مسافات طويلة", "zh": "长途出行", "pt": "Longa distância"},
+    "special": {"en": "Special Occasions", "es": "Ocasiones especiales", "ar": "مناسبات خاصة", "zh": "特殊场合", "pt": "Ocasiões especiais"},
+}
+
+FAQ = {
+    "fr": [
+        ("Comment modifier ma réservation ?", "Depuis « Mes courses », ouvrez la course puis annulez-la (gratuit tant qu'aucun chauffeur n'a accepté) et réservez à nouveau avec les bons horaires. Vous pouvez aussi écrire au chauffeur via le chat."),
+        ("Comment annuler ?", "Ouvrez la course et touchez « Annuler la course ». Gratuit avant acceptation, 3 € de frais après acceptation. Une course en cours ne peut pas être annulée."),
+        ("Où retrouver mon chauffeur ?", "Vous recevez son nom, sa photo, son véhicule et sa plaque dès l'acceptation. Suivez-le en direct sur la carte ; à l'aéroport il vous attend à la sortie des arrivées avec une pancarte à votre nom."),
+        ("Que faire si mon vol est retardé ?", "Indiquez votre numéro de vol lors de la réservation : nous suivons le vol et décalons la prise en charge automatiquement, sans frais."),
+        ("Comment fonctionne le paiement ?", "Payez par carte (Visa, Mastercard, Amex, Apple Pay, Google Pay via paiement sécurisé Stripe), en espèces, ou avec votre crédit parrainage. Le reçu est disponible dans le détail de la course."),
+        ("J'ai oublié un objet dans le véhicule", "Contactez le chauffeur via le chat de la course ou notre support WhatsApp avec votre numéro de réservation (RG-…) : nous organisons la restitution."),
+    ],
+    "en": [
+        ("How do I change my booking?", "Open the ride in “My rides”, cancel it (free until a driver accepts) and book again with the right time. You can also message the driver in the ride chat."),
+        ("How do I cancel?", "Open the ride and tap “Cancel ride”. Free before acceptance, €3 fee after a driver accepted. A ride in progress cannot be cancelled."),
+        ("Where do I meet my driver?", "You receive the driver's name, photo, car and plate as soon as they accept. Track them live on the map; at the airport they wait at the arrivals exit with a name sign."),
+        ("What if my flight is delayed?", "Enter your flight number when booking: we monitor the flight and shift the pickup automatically, free of charge."),
+        ("How does payment work?", "Pay by card (Visa, Mastercard, Amex, Apple Pay, Google Pay through secure Stripe checkout), in cash, or with your referral credit. The receipt is available in the ride details."),
+        ("I left something in the car", "Contact the driver through the ride chat or our WhatsApp support with your booking number (RG-…): we will arrange the return."),
+    ],
+}
+
 CANCELLATION_POLICY = {
     "free_until_accept": True,
     "fee_after_accept": 3.0,

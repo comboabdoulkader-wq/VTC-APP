@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
@@ -12,8 +13,10 @@ import PromosManager from "@/src/components/PromosManager";
 import WalletCard from "@/src/components/WalletCard";
 import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
 import AccountSection from "@/src/components/AccountSection";
+import LanguagePicker from "@/src/components/LanguagePicker";
 
 export default function CompanyProfile() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -44,6 +47,7 @@ export default function CompanyProfile() {
 
       <WalletCard />
       <PhoneVerifyCard />
+      <LanguagePicker />
       <AccountSection />
 
       <Pressable testID="open-promos" onPress={() => setShowPromos(true)} style={styles.menu}>
@@ -71,7 +75,7 @@ export default function CompanyProfile() {
 
       <Pressable testID="logout-button" style={styles.logout} onPress={async () => { await logout(); router.replace("/(auth)/welcome"); }}>
         <Icon name="logout" size={20} color={theme.color.error} />
-        <Text style={styles.logoutText}>Se déconnecter</Text>
+        <Text style={styles.logoutText}>{t("logout")}</Text>
       </Pressable>
     </ScrollView>
   );
