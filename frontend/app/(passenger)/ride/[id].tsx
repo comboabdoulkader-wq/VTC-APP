@@ -7,6 +7,8 @@ import * as WebBrowser from "expo-web-browser";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import RideSummary from "@/src/components/RideSummary";
+import ReviewForm, { ReviewPayload } from "@/src/components/passenger/ReviewForm";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { money, fmtDateTime } from "@/src/utils/format";
@@ -31,10 +33,8 @@ export default function RideDetail() {
   const { token } = useAuth();
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rating, setRating] = useState(5);
   const [submittingRate, setSubmittingRate] = useState(false);
   const [paying, setPaying] = useState(false);
-  const [tip, setTip] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -71,14 +71,14 @@ export default function RideDetail() {
     } catch {}
   };
 
-  const submitRating = async () => {
+  const submitRating = async (p: ReviewPayload) => {
     setSubmittingRate(true);
     try {
-      await apiFetch(`/rides/${id}/rate`, { method: "POST", body: JSON.stringify({ rating, tip }) }, token);
-      if (tip > 0 && ride?.payment_method === "card") {
+      await apiFetch(`/rides/${id}/rate`, { method: "POST", body: JSON.stringify(p) }, token);
+      if (p.tip > 0 && ride?.payment_method === "card") {
         await checkout("tip");
       }
-      router.replace("/(passenger)/rides");
+      await load();
     } catch {} finally { setSubmittingRate(false); }
   };
 
@@ -144,6 +144,8 @@ export default function RideDetail() {
               <Text style={styles.arrivingText}>Votre chauffeur arrive dans moins de 2 minutes. Soyez prêt !</Text>
             </View>
           )}
+
+          <RideSummary ride={ride} />
 
           {ride.scheduled_at && (
             <View style={styles.infoRow}><Icon name="calendar-clock" size={16} color={theme.color.onSurfaceSecondary} /><Text style={styles.infoText}>Programmée : {fmtDateTime(ride.scheduled_at)}</Text></View>
@@ -244,27 +246,20 @@ export default function RideDetail() {
           )}
 
           {ride.status === "completed" && !ride.rating && (
-            <View style={styles.rateBox} testID="rating-box">
-              <Text style={styles.rateTitle}>Notez votre chauffeur</Text>
-              <View style={styles.stars}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Pressable key={n} testID={`star-${n}`} onPress={() => setRating(n)} hitSlop={6}>
-                    <Icon name={n <= rating ? "star" : "star-outline"} size={40} color={theme.color.star} />
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.tipLabel}>Ajouter un pourboire {ride.payment_method === "card" ? "(payé par carte)" : "(remis en espèces)"}</Text>
-              <View style={styles.tipRow}>
-                {[0, 1, 2, 5, 10].map((t) => (
-                  <Pressable key={t} testID={`tip-${t}`} onPress={() => setTip(t)} style={[styles.tipChip, tip === t && styles.tipChipActive]}>
-                    <Text style={[styles.tipText, tip === t && { color: "#fff" }]}>{t === 0 ? "Aucun" : `${t} €`}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Pressable testID="submit-rating" onPress={submitRating} disabled={submittingRate} style={({ pressed }) => [styles.primary, { marginTop: 0 }, pressed && { opacity: 0.85 }, submittingRate && { opacity: 0.7 }]}>
-                {submittingRate ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{tip > 0 ? `Envoyer et donner ${money(tip)}` : "Envoyer"}</Text>}
-              </Pressable>
+            <ReviewForm paymentMethod={ride.payment_method} submitting={submittingRate} onSubmit={submitRating} />
+          )}
+          {ride.rating ? (
+            <View style={styles.infoRow} testID="my-review">
+              <Icon name="star" size={16} color={theme.color.star} />
+              <Text style={styles.infoText}>Votre note : {ride.rating}/5{ride.review?.comment ? ` · « ${ride.review.comment} »` : ""}</Text>
             </View>
+          ) : null}
+
+          {["completed", "cancelled"].includes(ride.status) && (
+            <Pressable testID="book-again" onPress={() => router.push({ pathname: "/(passenger)", params: { rebook: ride.id } } as any)} style={styles.secondary}>
+              <Icon name="refresh" size={18} color={theme.color.onSurface} />
+              <Text style={styles.secondaryText}>Réserver à nouveau ce trajet</Text>
+            </Pressable>
           )}
 
           {canCancel && (
@@ -282,6 +277,8 @@ export default function RideDetail() {
 }
 
 const styles = StyleSheet.create({
+  secondary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.spacing.sm, height: 52, borderRadius: theme.radius.pill, borderWidth: 1.5, borderColor: theme.color.onSurface, marginBottom: theme.spacing.md },
+  secondaryText: { fontSize: 15, fontWeight: "800", color: theme.color.onSurface },
   root: { flex: 1, backgroundColor: theme.color.surface },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.color.surface },
   back: { position: "absolute", left: theme.spacing.lg, width: 44, height: 44, borderRadius: 22, backgroundColor: theme.color.surface, alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.15)" },

@@ -18,4 +18,4 @@ export const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Annulée", color: "#D32F2F" },
 };
 
-export const VEHICLE_ICON: Record<string, string> = { standard: "car", premium: "car-sports", van: "van-passenger" };
+export const VEHICLE_ICON: Record<string, string> = { standard: "car", premium: "car-sports", van: "van-passenger", van_premium: "van-utility", group: "bus" };

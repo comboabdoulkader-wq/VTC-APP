@@ -7,7 +7,8 @@ from pydantic import BaseModel, EmailStr, Field
 Role = Literal["passenger", "driver", "company"]
 BudgetPeriod = Literal["day", "week", "month"]
 RideStatus = Literal["requested", "accepted", "in_progress", "completed", "cancelled"]
-VehicleType = Literal["standard", "premium", "van"]
+VehicleType = Literal["standard", "premium", "van", "van_premium", "group"]
+ServiceType = Literal["private", "airport", "hourly", "business", "city_tour", "events", "long_distance", "special"]
 PaymentMethod = Literal["cash", "card"]
 PaymentStatus = Literal["unpaid", "pending", "paid"]
 RideSource = Literal["platform", "private"]
@@ -103,7 +104,18 @@ class LocationIn(BaseModel):
     address: str
 
 
-class EstimateIn(BaseModel):
+class TripDetailsMixin(BaseModel):
+    service_type: ServiceType = "private"
+    hours: int = Field(default=0, ge=0, le=24)  # hourly services only
+    passengers: int = Field(default=1, ge=1, le=16)
+    children: int = Field(default=0, ge=0, le=10)
+    child_seats: int = Field(default=0, ge=0, le=4)
+    luggage: int = Field(default=0, ge=0, le=20)
+    flight_number: Optional[str] = Field(default=None, max_length=10)
+    airline: Optional[str] = Field(default=None, max_length=60)
+
+
+class EstimateIn(TripDetailsMixin):
     pickup: LocationIn
     dropoff: LocationIn
 
@@ -115,6 +127,15 @@ class VehicleEstimate(BaseModel):
     distance_km: float
     duration_min: int
     eta_min: int
+    category: str = ""
+    description: str = ""
+    image_url: str = ""
+    passengers: int = 3
+    luggage: int = 3
+    fits: bool = True
+    fixed_price: bool = False
+    fixed_route_name: Optional[str] = None
+    hourly_rate: Optional[float] = None
 
 
 class SurchargeOut(BaseModel):
@@ -130,9 +151,12 @@ class SurchargeOut(BaseModel):
 class EstimateOut(BaseModel):
     options: List[VehicleEstimate]
     surcharge: SurchargeOut
+    pricing: str = "distance"
+    hours: int = 0
+    cancellation_policy: str = ""
 
 
-class RideCreateIn(BaseModel):
+class RideCreateIn(TripDetailsMixin):
     pickup: LocationIn
     dropoff: LocationIn
     vehicle_type: VehicleType
@@ -205,11 +229,43 @@ class RideOut(BaseModel):
     completed_at: Optional[datetime] = None
     rating: Optional[int] = None
     tip: Optional[float] = None
+    booking_ref: Optional[str] = None
+    service_type: str = "private"
+    service_label: str = "Chauffeur privé"
+    hours: int = 0
+    passengers: int = 1
+    children: int = 0
+    child_seats: int = 0
+    luggage: int = 0
+    fixed_price: bool = False
+    fixed_route_name: Optional[str] = None
+    flight: Optional[dict] = None
+    review: Optional[dict] = None
 
 
 class RateIn(BaseModel):
     rating: int = Field(ge=1, le=5)
     tip: float = Field(default=0, ge=0)
+    comment: Optional[str] = Field(default=None, max_length=500)
+    punctuality: Optional[int] = Field(default=None, ge=1, le=5)
+    cleanliness: Optional[int] = Field(default=None, ge=1, le=5)
+    driving: Optional[int] = Field(default=None, ge=1, le=5)
+    vehicle: Optional[int] = Field(default=None, ge=1, le=5)
+
+
+class FixedRouteZone(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    lat: float
+    lng: float
+    radius_km: float = Field(gt=0, le=50)
+
+
+class FixedRouteIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    from_zone: FixedRouteZone
+    to_zone: FixedRouteZone
+    prices: dict[str, float]
+    active: bool = True
 
 
 class DriverStatusIn(BaseModel):

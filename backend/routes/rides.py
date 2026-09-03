@@ -8,6 +8,8 @@ from core import (
     require_role, send_tracking_link, surcharge_for, trip_metrics, working_driver,
 )
 from push import push_safe
+from catalog import CANCELLATION_POLICY, SERVICES, VEHICLES, booking_ref, fits, hourly_price, match_fixed_route
+from flights import lookup_flight, normalize_flight
 from models import EstimateIn, EstimateOut, RateIn, RideBatchIn, RideCreateIn, RideOut, VehicleEstimate
 from serializers import ride_to_out
 
@@ -22,21 +24,55 @@ async def estimate(data: EstimateIn):
     dist, duration = trip_metrics(pickup, dropoff)
     sur = await surcharge_for(pickup)
     mult = sur["price_multiplier"]
-    options = [
-        VehicleEstimate(
-            vehicle_type=vt, label=cfg["label"], price=round(base_fare(vt, dist, duration) * mult, 2),
-            distance_km=dist, duration_min=duration, eta_min=cfg["eta"],
-        )
-        for vt, cfg in VEHICLE_PRICING.items()
-    ]
-    return EstimateOut(options=options, surcharge=sur)
+    svc = SERVICES[data.service_type]
+    hours = max(data.hours, svc["min_hours"]) if svc["pricing"] == "hourly" else 0
+    fixed = await match_fixed_route(pickup, dropoff) if svc["pricing"] == "distance" else None
+    total_pax = data.passengers + data.children
+    options = []
+    for vt, cfg in VEHICLE_PRICING.items():
+        v = VEHICLES[vt]
+        if hours:
+            price = hourly_price(vt, hours)
+        elif fixed and vt in fixed["prices"]:
+            price = round(float(fixed["prices"][vt]), 2)
+        else:
+            price = round(base_fare(vt, dist, duration) * mult, 2)
+        options.append(VehicleEstimate(
+            vehicle_type=vt, label=v["label"], price=price, distance_km=dist, duration_min=duration, eta_min=cfg["eta"],
+            category=v["category"], description=v["description"], image_url=v["image_url"], passengers=v["passengers"], luggage=v["luggage"],
+            fits=fits(vt, total_pax, data.luggage), fixed_price=bool(fixed and not hours and vt in fixed["prices"]),
+            fixed_route_name=fixed["name"] if fixed and not hours else None, hourly_rate=v["hourly"] if hours else None,
+        ))
+    return EstimateOut(options=options, surcharge=sur, pricing="hourly" if hours else "fixed" if fixed else "distance", hours=hours,
+                       cancellation_policy=CANCELLATION_POLICY["text"])
 
 
 async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = None) -> dict:
     pickup, dropoff = data.pickup.model_dump(), data.dropoff.model_dump()
     dist, duration = trip_metrics(pickup, dropoff)
     city = await surcharge_for(pickup)
-    base = round(base_fare(data.vehicle_type, dist, duration) * city["price_multiplier"], 2)
+    svc = SERVICES[data.service_type]
+    hours = max(data.hours, svc["min_hours"]) if svc["pricing"] == "hourly" else 0
+    fixed = await match_fixed_route(pickup, dropoff) if not hours else None
+    if not fits(data.vehicle_type, data.passengers + data.children, data.luggage):
+        v = VEHICLES[data.vehicle_type]
+        raise HTTPException(422, f"{v['label']} : {v['passengers']} passagers et {v['luggage']} bagages maximum. Choisissez un véhicule plus grand.")
+    if hours:
+        base = hourly_price(data.vehicle_type, hours)
+    elif fixed and data.vehicle_type in fixed["prices"]:
+        base = round(float(fixed["prices"][data.vehicle_type]), 2)
+    else:
+        base = round(base_fare(data.vehicle_type, dist, duration) * city["price_multiplier"], 2)
+    flight = None
+    if data.flight_number and data.flight_number.strip():
+        flight = {"number": normalize_flight(data.flight_number), "airline": (data.airline or "").strip() or None,
+                  "date": data.scheduled_at.date().isoformat() if data.scheduled_at else None}
+        try:
+            info = await lookup_flight(flight["number"], flight["date"])
+            flight.update({k: v for k, v in info.items() if k != "cached"})
+            flight["airline"] = flight.get("airline") or info.get("airline")
+        except Exception as e:  # manual entry still accepted when tracking is unavailable
+            flight["tracking_error"] = str(e)
     sur = city if data.surcharge_enabled else None
     sur_amount = sur["amount"] if sur else 0.0
     discount, promo_code = 0.0, None
@@ -81,6 +117,16 @@ async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = N
         "cancellation_fee": 0,
         "use_wallet": bool(data.use_wallet),
         "wallet_amount": 0,
+        "booking_ref": booking_ref(),
+        "service_type": data.service_type,
+        "hours": hours,
+        "passengers": data.passengers,
+        "children": data.children,
+        "child_seats": data.child_seats,
+        "luggage": data.luggage,
+        "fixed_price": bool(fixed and data.vehicle_type in fixed["prices"]),
+        "fixed_route_name": fixed["name"] if fixed and data.vehicle_type in fixed["prices"] else None,
+        "flight": flight,
         "created_at": now_utc(),
     }
 
@@ -224,6 +270,9 @@ async def accept_ride(ride_id: str, user=Depends(working_driver)):
     await notify(r.get("passenger_id"), "accepted", "Chauffeur trouvé",
                  f"{user['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", ride_id, sms=True)
     await send_tracking_link(r)
+    if r.get("flight") and r["flight"].get("number"):
+        await notify(r.get("passenger_id"), "flight", "Votre chauffeur suit votre vol",
+                     f"{r['flight']['number']} · nous adaptons la prise en charge en cas de retard", ride_id)
     return ride_to_out(r)
 
 
@@ -300,7 +349,12 @@ async def rate_ride(ride_id: str, data: RateIn, user=Depends(require_role("passe
         raise HTTPException(409, "La course n'est pas terminée")
     if r.get("rating"):
         raise HTTPException(409, "Déjà noté")
-    await db.rides.update_one({"id": ride_id}, {"$set": {"rating": data.rating, "tip": data.tip}})
+    review = {k: getattr(data, k) for k in ("punctuality", "cleanliness", "driving", "vehicle") if getattr(data, k)}
+    if data.comment and data.comment.strip():
+        review["comment"] = data.comment.strip()
+    review["created_at"] = now_utc()
+    await db.rides.update_one({"id": ride_id}, {"$set": {"rating": data.rating, "tip": data.tip, "review": review}})
+    r["review"] = review
     if r.get("driver_id"):
         driver = await db.users.find_one({"id": r["driver_id"]}, {"_id": 0})
         if driver:

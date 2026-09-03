@@ -51,9 +51,11 @@ DEFAULT_CITIES = [
 ]
 
 VEHICLE_PRICING = {
-    "standard": {"base": 3.0, "per_km": 1.5, "per_min": 0.3, "label": "Standard", "eta": 3},
-    "premium": {"base": 5.0, "per_km": 2.5, "per_min": 0.5, "label": "Premium", "eta": 5},
+    "standard": {"base": 3.0, "per_km": 1.5, "per_min": 0.3, "label": "Berline", "eta": 3},
+    "premium": {"base": 5.0, "per_km": 2.5, "per_min": 0.5, "label": "Business Class", "eta": 5},
     "van": {"base": 6.0, "per_km": 2.0, "per_min": 0.4, "label": "Van", "eta": 7},
+    "van_premium": {"base": 9.0, "per_km": 2.9, "per_min": 0.6, "label": "Van Premium", "eta": 10},
+    "group": {"base": 15.0, "per_km": 3.4, "per_min": 0.7, "label": "Minibus Groupe", "eta": 20},
 }
 
 

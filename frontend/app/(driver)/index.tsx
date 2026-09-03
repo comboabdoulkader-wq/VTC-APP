@@ -21,6 +21,10 @@ function RideTags({ r }: { r: Ride }) {
       {r.scheduled_at ? <Text style={[styles.tag, styles.tagSched]}>📅 {fmtDateTime(r.scheduled_at)}</Text> : <Text style={styles.tag}>⚡ Immédiat</Text>}
       {r.surcharge_enabled ? <Text style={[styles.tag, styles.tagBonus]}>+{money(r.surcharge_amount)} rallonge</Text> : null}
       {r.passenger_label ? <Text style={styles.tag}>👤 {r.passenger_label}</Text> : null}
+      {r.service_type && r.service_type !== "private" ? <Text style={styles.tag}>{r.service_label}{r.hours ? ` ${r.hours} h` : ""}</Text> : null}
+      <Text style={styles.tag}>👥 {(r.passengers || 1) + (r.children || 0)} · 🧳 {r.luggage || 0}{r.child_seats ? ` · 🪑 ${r.child_seats}` : ""}</Text>
+      {r.flight?.number ? <Text style={[styles.tag, r.flight.arrival_delay_min > 0 && styles.tagBonus]}>✈️ {r.flight.number}{r.flight.arrival_delay_min > 0 ? ` retard +${r.flight.arrival_delay_min} min` : r.flight.status ? ` ${r.flight.status}` : ""}</Text> : null}
+      {r.fixed_price ? <Text style={styles.tag}>🔒 Prix fixe</Text> : null}
       <Text style={styles.tag}>{r.payment_method === "card" ? "💳 Carte" : "💵 Espèces"}</Text>
       {r.assigned_by_name ? <Text style={styles.tag}>🧭 Affectée par {r.assigned_by_name}</Text> : null}
     </View>

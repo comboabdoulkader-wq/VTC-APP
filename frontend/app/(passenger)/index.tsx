@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Alert, Platform, TextInput } from "react-native";
 import BottomSheet, { BottomSheetView, BottomSheetTextInput, BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
@@ -14,9 +14,12 @@ import { useMyPosition } from "@/src/hooks/useMyPosition";
 import { useAddressSearch } from "@/src/hooks/useAddressSearch";
 import SheetModal from "@/src/components/ui/SheetModal";
 import { money, fmtDateTime, VEHICLE_ICON } from "@/src/utils/format";
+import ServicePicker, { Service } from "@/src/components/passenger/ServicePicker";
+import TripDetails, { DEFAULT_TRIP, TripDetailsValue } from "@/src/components/passenger/TripDetails";
+import VehicleCard, { VehicleOption } from "@/src/components/passenger/VehicleCard";
 
-type Estimate = { vehicle_type: "standard" | "premium" | "van"; label: string; price: number; distance_km: number; duration_min: number; eta_min: number };
-type CartItem = { key: string; pickup: Place; dropoff: Place; vehicle: Estimate; options: RideOptionsValue; surcharge: Surcharge };
+type Estimate = VehicleOption;
+type CartItem = { key: string; pickup: Place; dropoff: Place; vehicle: Estimate; options: RideOptionsValue; surcharge: Surcharge; service: string; trip: TripDetailsValue };
 const SheetInput: any = Platform.OS === "web" ? TextInput : BottomSheetTextInput;
 
 const toPayload = (it: CartItem) => ({
@@ -31,6 +34,17 @@ const toPayload = (it: CartItem) => ({
   business: it.options.business,
   promo_code: it.options.promoCode || null,
   use_wallet: it.options.useWallet && !it.options.business,
+  service_type: it.service,
+  hours: it.trip.hours,
+  passengers: it.trip.passengers,
+  children: it.trip.children,
+  child_seats: it.trip.childSeats,
+  luggage: it.trip.luggage,
+  flight_number: it.service === "airport" && it.trip.flightNumber.trim() ? it.trip.flightNumber.trim() : null,
+  airline: it.service === "airport" && it.trip.airline.trim() ? it.trip.airline.trim() : null,
+});
+const tripPayload = (service: string, trip: TripDetailsValue, minHours: number) => ({
+  service_type: service, hours: Math.max(trip.hours, minHours), passengers: trip.passengers, children: trip.children, luggage: trip.luggage,
 });
 const itemTotal = (it: CartItem) => Math.max(it.vehicle.price + (it.options.surchargeEnabled ? it.surcharge.amount : 0) - (it.options.promoCode ? it.options.discount : 0), 0);
 
@@ -56,6 +70,14 @@ export default function PassengerHome() {
   const [cardEnabled, setCardEnabled] = useState(false);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [services, setServices] = useState<Service[]>([]);
+  const [service, setService] = useState("private");
+  const [trip, setTrip] = useState<TripDetailsValue>(DEFAULT_TRIP);
+  const [flightTracking, setFlightTracking] = useState(false);
+  const [cancelPolicy, setCancelPolicy] = useState("");
+  const { rebook } = useLocalSearchParams<{ rebook?: string }>();
+  const currentService = services.find((s) => s.key === service) || null;
+  const minHours = currentService?.pricing === "hourly" ? currentService.min_hours : 0;
   const gps = useMyPosition();
   const [favorites, setFavorites] = useState<(Place & { label: string; icon: string })[]>([]);
   const [saveFav, setSaveFav] = useState<Place | null>(null);
@@ -78,7 +100,24 @@ export default function PassengerHome() {
 
   const snapPoints = useMemo(() => ["30%", "62%", "92%"], []);
 
-  useEffect(() => { apiFetch<{ card_enabled: boolean }>("/payments/config").then((c) => setCardEnabled(c.card_enabled)).catch(() => {}); }, []);
+  useEffect(() => {
+    apiFetch<{ card_enabled: boolean }>("/payments/config").then((c) => setCardEnabled(c.card_enabled)).catch(() => {});
+    apiFetch<any>("/catalog").then((c) => { setServices(c.services); setFlightTracking(!!c.flight_tracking); setCancelPolicy(c.cancellation_policy?.text || ""); }).catch(() => {});
+  }, []);
+
+  // "Réserver à nouveau": prefill pickup/dropoff/service/details from a past ride
+  useEffect(() => {
+    if (!rebook || !token) return;
+    apiFetch<any>(`/rides/${rebook}`, {}, token).then(async (r) => {
+      const from: Place = { id: `rb-p-${r.id}`, name: r.pickup.address.split(",")[0], address: r.pickup.address, lat: r.pickup.lat, lng: r.pickup.lng };
+      const to: Place = { id: `rb-d-${r.id}`, name: r.dropoff.address.split(",")[0], address: r.dropoff.address, lat: r.dropoff.lat, lng: r.dropoff.lng };
+      const t: TripDetailsValue = { passengers: r.passengers || 1, children: r.children || 0, childSeats: r.child_seats || 0, luggage: r.luggage || 0, hours: r.hours || 0, flightNumber: r.flight?.number || "", airline: r.flight?.airline || "" };
+      setPickup(from); setService(r.service_type || "private"); setTrip(t); setDropoff(to); setShowCart(false); setSearchMode("dropoff");
+      sheetRef.current?.snapToIndex(2);
+      await loadEstimate(from, to, r.service_type || "private", t, r.vehicle_type);
+      router.setParams({ rebook: undefined } as any);
+    }).catch(() => {});
+  }, [rebook, token]);
 
   useFocusEffect(useCallback(() => {
     let alive = true;
@@ -104,18 +143,28 @@ export default function PassengerHome() {
     return [...local, ...geoResults.filter((p) => !seen.has(p.id))];
   }, [query, searchMode, gps.place, geoResults, favorites]);
 
-  const loadEstimate = async (from: Place, to: Place) => {
+  const loadEstimate = async (from: Place, to: Place, svc = service, t = trip, preferVehicle?: string) => {
     setLoadingEstimate(true);
     try {
-      const res = await apiFetch<{ options: Estimate[]; surcharge: Surcharge }>("/rides/estimate", {
+      const mh = services.find((s) => s.key === svc)?.pricing === "hourly" ? services.find((s) => s.key === svc)!.min_hours : 0;
+      const res = await apiFetch<{ options: Estimate[]; surcharge: Surcharge; hours: number }>("/rides/estimate", {
         method: "POST",
-        body: JSON.stringify({ pickup: { lat: from.lat, lng: from.lng, address: from.address }, dropoff: { lat: to.lat, lng: to.lng, address: to.address } }),
+        body: JSON.stringify({ pickup: { lat: from.lat, lng: from.lng, address: from.address }, dropoff: { lat: to.lat, lng: to.lng, address: to.address }, ...tripPayload(svc, t, mh) }),
       }, token);
       setEstimates(res.options);
       setSurcharge(res.surcharge);
-      setSelected((prev) => res.options.find((o) => o.vehicle_type === prev?.vehicle_type) || res.options[0]);
+      if (res.hours && res.hours !== t.hours) setTrip((prev) => ({ ...prev, hours: res.hours }));
+      setSelected((prev) => {
+        const want = preferVehicle || prev?.vehicle_type;
+        const keep = res.options.find((o) => o.vehicle_type === want && o.fits !== false);
+        return keep || res.options.find((o) => o.fits !== false) || null;
+      });
     } catch {} finally { setLoadingEstimate(false); }
   };
+
+  // Re-estimate when service / passengers / luggage / hours change
+  const tripKey = `${service}|${trip.passengers}|${trip.children}|${trip.luggage}|${trip.hours}`;
+  useEffect(() => { if (dropoff) loadEstimate(pickup, dropoff); }, [tripKey]);
 
   const choosePlace = async (p: Place) => {
     setQuery("");
@@ -138,10 +187,10 @@ export default function PassengerHome() {
     if (ok) setSearchMode("dropoff");
   };
 
-  const reset = () => { setDropoff(null); setEstimates([]); setSelected(null); setSurcharge(null); setOptions(DEFAULT_OPTIONS); setSearchMode("dropoff"); };
+  const reset = () => { setDropoff(null); setEstimates([]); setSelected(null); setSurcharge(null); setOptions(DEFAULT_OPTIONS); setTrip(DEFAULT_TRIP); setSearchMode("dropoff"); };
 
   const currentItem = (): CartItem | null => (dropoff && selected && surcharge)
-    ? { key: `${Date.now()}`, pickup, dropoff, vehicle: selected, options, surcharge } : null;
+    ? { key: `${Date.now()}`, pickup, dropoff, vehicle: selected, options, surcharge, service, trip: { ...trip, hours: Math.max(trip.hours, minHours) } } : null;
 
   const orderNow = async () => {
     const it = currentItem();
@@ -243,6 +292,9 @@ export default function PassengerHome() {
                 <Pressable testID="pickup-cancel" onPress={() => setSearchMode("dropoff")} hitSlop={10}><Icon name="close" size={22} color={theme.color.onSurfaceSecondary} /></Pressable>
               )}
             </View>
+            {searchMode === "dropoff" && services.length > 0 && (
+              <ServicePicker services={services} value={service} onChange={(sv) => { setService(sv.key); setTrip((t) => ({ ...t, hours: sv.pricing === "hourly" ? Math.max(t.hours, sv.min_hours) : 0 })); }} />
+            )}
             {searchMode === "pickup" && (
               <Pressable testID="use-gps" onPress={useGps} style={styles.gpsRow}>
                 <View style={[styles.placeIcon, { backgroundColor: "#EAF6EE" }]}>
@@ -293,24 +345,21 @@ export default function PassengerHome() {
               <Pressable testID="reset-dropoff" onPress={reset} hitSlop={8}><Icon name="close" size={22} color={theme.color.onSurfaceSecondary} /></Pressable>
             </View>
 
+            {services.length > 0 && (
+              <ServicePicker services={services} value={service} onChange={(sv) => { setService(sv.key); setTrip((t) => ({ ...t, hours: sv.pricing === "hourly" ? Math.max(t.hours, sv.min_hours) : 0 })); }} />
+            )}
+            <TripDetails value={trip} onChange={setTrip} service={currentService} flightTracking={flightTracking} />
+
             <Text style={styles.sectionTitle}>Choisissez votre véhicule</Text>
+            {estimates[0]?.fixed_route_name ? <Text style={styles.fixedRoute} testID="fixed-route-name">✓ Trajet à prix fixe : {estimates[0].fixed_route_name}</Text> : null}
             {loadingEstimate ? <ActivityIndicator style={{ marginVertical: 30 }} color={theme.color.onSurface} /> : (
               <View style={{ gap: theme.spacing.sm }}>
-                {estimates.map((e) => {
-                  const active = selected?.vehicle_type === e.vehicle_type;
-                  return (
-                    <Pressable key={e.vehicle_type} testID={`vehicle-${e.vehicle_type}`} onPress={() => setSelected(e)} style={[styles.vehicleRow, active && styles.vehicleRowActive]}>
-                      <View style={styles.vehicleIcon}><Icon name={VEHICLE_ICON[e.vehicle_type] as any} size={26} color={theme.color.onSurface} /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.vehicleName}>{e.label}</Text>
-                        <Text style={styles.vehicleMeta}>{e.eta_min} min d'attente • {e.duration_min} min • {e.distance_km.toFixed(1)} km</Text>
-                      </View>
-                      <Text style={styles.vehiclePrice}>{money(e.price)}</Text>
-                    </Pressable>
-                  );
-                })}
+                {estimates.map((e) => (
+                  <VehicleCard key={e.vehicle_type} option={e} active={selected?.vehicle_type === e.vehicle_type} hours={minHours ? Math.max(trip.hours, minHours) : 0} onPress={() => setSelected(e)} />
+                ))}
               </View>
             )}
+            {cancelPolicy ? <Text style={styles.policy} testID="cancellation-policy">{cancelPolicy}</Text> : null}
 
             {selected && surcharge && (
               <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} budget={budget} walletBalance={walletBalance} />
@@ -372,6 +421,8 @@ const styles = StyleSheet.create({
   tripLabel: { fontSize: 11, color: theme.color.onSurfaceTertiary, fontWeight: "600", textTransform: "uppercase" },
   tripAddr: { fontSize: 15, color: theme.color.onSurface, fontWeight: "600", marginTop: 2 },
   tripDivider: { height: 1, backgroundColor: theme.color.border, marginVertical: theme.spacing.sm },
+  fixedRoute: { fontSize: 12, fontWeight: "700", color: theme.color.success, marginBottom: theme.spacing.sm },
+  policy: { fontSize: 11, color: theme.color.onSurfaceTertiary, marginTop: theme.spacing.md, lineHeight: 15 },
   sectionTitle: { fontSize: 18, fontWeight: "800", color: theme.color.onSurface, marginTop: theme.spacing.xl, marginBottom: theme.spacing.md },
   vehicleRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, padding: theme.spacing.md, borderRadius: theme.radius.md, borderWidth: 2, borderColor: "transparent", backgroundColor: theme.color.surfaceSecondary },
   vehicleRowActive: { borderColor: theme.color.onSurface, backgroundColor: theme.color.surface },

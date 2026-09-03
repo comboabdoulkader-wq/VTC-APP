@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
-import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 
 import { apiFetch, useAuth } from "@/src/context/auth";
+import { getNotifications } from "@/src/utils/push";
 
 /**
  * Registers the device push token (native FCM/APNs) with the backend relay.
@@ -16,8 +15,8 @@ export default function PushRegistrar() {
   const lastSent = useRef<string | null>(null);
 
   const register = useCallback(async () => {
-    if (Platform.OS === "web" || !user || !token || !Device.isDevice) return;
-    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return; // Expo Go: unsupported
+    const Notifications = getNotifications(); // null on web and in Expo Go
+    if (!Notifications || !user || !token || !Device.isDevice) return;
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") return;

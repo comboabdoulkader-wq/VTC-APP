@@ -9,7 +9,7 @@ import { apiFetch, useAuth } from "@/src/context/auth";
 import { fmtDateTime } from "@/src/utils/format";
 
 type Ride = {
-  id: string; pickup: any; dropoff: any; price: number; status: string;
+  id: string; booking_ref?: string | null; service_type?: string; service_label?: string; flight?: any; pickup: any; dropoff: any; price: number; status: string;
   created_at: string; vehicle_type: string; rating?: number; driver_name?: string;
   scheduled_at?: string | null; passenger_label?: string | null; surcharge_enabled?: boolean;
   payment_method?: string; payment_status?: string; driver_eta_min?: number | null;
@@ -80,14 +80,16 @@ export default function Rides() {
               >
                 <View style={styles.cardHeader}>
                   <Text style={styles.date}>
-                    {item.scheduled_at ? `📅 ${fmtDateTime(item.scheduled_at)}` : new Date(item.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    {item.booking_ref ? `${item.booking_ref} · ` : ""}{item.scheduled_at ? `📅 ${fmtDateTime(item.scheduled_at)}` : new Date(item.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </Text>
                   <View style={[styles.badge, { backgroundColor: status.color + "22" }]}>
                     <Text style={[styles.badgeText, { color: status.color }]}>{status.label}</Text>
                   </View>
                 </View>
-                {(item.passenger_label || item.surcharge_enabled) && (
+                {(item.passenger_label || item.surcharge_enabled || (item.service_type && item.service_type !== "private") || item.flight?.number) && (
                   <View style={styles.tags}>
+                    {item.service_type && item.service_type !== "private" ? <Text style={styles.tag}>{item.service_label}</Text> : null}
+                    {item.flight?.number ? <Text style={styles.tag}>✈️ {item.flight.number}</Text> : null}
                     {item.passenger_label ? <Text style={styles.tag}>👤 {item.passenger_label}</Text> : null}
                     {item.surcharge_enabled ? <Text style={styles.tag}>⚡ Rallonge</Text> : null}
                     {item.payment_method === "card" ? <Text style={styles.tag}>💳 {item.payment_status === "paid" ? "Payé" : "Carte"}</Text> : null}
@@ -105,6 +107,12 @@ export default function Rides() {
                   <Text style={styles.driver}>{item.driver_name ? `${item.driver_name}${item.driver_eta_min != null && isActive ? ` · ${item.driver_eta_min} min` : ""}` : "En recherche"}</Text>
                   <Text style={styles.price}>{item.price.toFixed(2)} €</Text>
                 </View>
+                {!isActive && (
+                  <Pressable testID={`book-again-${item.id}`} onPress={() => router.push({ pathname: "/(passenger)", params: { rebook: item.id } } as any)} style={styles.again} hitSlop={6}>
+                    <Icon name="refresh" size={16} color={theme.color.onSurface} />
+                    <Text style={styles.againText}>Réserver à nouveau</Text>
+                  </Pressable>
+                )}
               </Pressable>
             );
           }}
@@ -115,6 +123,8 @@ export default function Rides() {
 }
 
 const styles = StyleSheet.create({
+  again: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: theme.spacing.md, height: 40, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.color.borderStrong },
+  againText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   root: { flex: 1, backgroundColor: theme.color.surface },
   header: { paddingHorizontal: theme.spacing.xl, paddingVertical: theme.spacing.lg },
   title: { fontSize: 32, fontWeight: "800", color: theme.color.onSurface, letterSpacing: -1 },

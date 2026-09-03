@@ -108,3 +108,7 @@ See /app/memory/test_credentials.md
 - Phase 4 Trust & support: FAQ, support (WhatsApp/email/phone – details later), legal pages, company identity
 - Phase 5 Admin back-office (clients, bookings, payments, zones, pricing grid) + hotel/concierge partner space
 - Phase 6 International: Google/Apple sign-in, Apple Pay/Google Pay (Stripe), email receipts, SEO website
+
+## Iteration 12–13 – Phase 2 booking premium (DONE) + Expo Go crash fix
+- Phase 2 delivered & tested (backend 13/13, frontend OK): 8 services, trip details (pax/children/child seats/luggage/hours/flight), 5 vehicle categories with capacity + photos (van/van_premium use icon fallback – photos to replace later), fixed-price routes (12 seeded, moderator CRUD `/admin/fixed-routes`), booking ref RG-XXXXXX, cancellation policy text, detailed reviews, "Réserver à nouveau" (`/(passenger)?rebook=<ride_id>`), AviationStack module (`flights.py`, env `AVIATIONSTACK_API_KEY` empty → manual flight entry, `/flights/{n}` 503)
+- Fix: expo-notifications must never be imported statically (crashes Android Expo Go). Use `src/utils/push.ts getNotifications()` (lazy require, null in Expo Go/web)

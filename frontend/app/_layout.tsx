@@ -1,6 +1,5 @@
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import * as Notifications from "expo-notifications";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect } from "react";
@@ -12,6 +11,7 @@ import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/context/auth";
 import PushRegistrar from "@/src/components/PushRegistrar";
 import { theme } from "@/src/theme";
+import { getNotifications } from "@/src/utils/push";
 
 // Disable logbox errors so users see the app.
 LogBox.ignoreAllLogs(true);
@@ -20,8 +20,9 @@ LogBox.ignoreAllLogs(true);
 // Required so icon glyphs are available on first render (Expo Go loads the font from a CDN).
 SplashScreen.preventAutoHideAsync();
 
-// ---- Push notifications (native only) ----
-if (Platform.OS !== "web") {
+// ---- Push notifications (native builds only; expo-notifications is never evaluated in Expo Go / web) ----
+const Notifications = getNotifications();
+if (Notifications) {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -31,14 +32,14 @@ if (Platform.OS !== "web") {
       shouldSetBadge: false,
     }),
   });
-}
-if (Platform.OS === "android") {
-  Notifications.setNotificationChannelAsync("default", {
-    name: "Courses et alertes",
-    importance: Notifications.AndroidImportance.MAX,
-    sound: "default",
-    vibrationPattern: [0, 250, 250, 250],
-  });
+  if (Platform.OS === "android") {
+    Notifications.setNotificationChannelAsync("default", {
+      name: "Courses et alertes",
+      importance: Notifications.AndroidImportance.MAX,
+      sound: "default",
+      vibrationPattern: [0, 250, 250, 250],
+    });
+  }
 }
 
 /** On wide screens (web desktop / large tablets) the app is centred in a phone-width column instead of stretching edge to edge. */
@@ -58,7 +59,7 @@ export default function RootLayout() {
   }, [loaded, error]);
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (!Notifications) return;
     const open = (data: Record<string, any>) => {
       const url = data?.deeplink || data?.action_url;
       if (!url || typeof url !== "string") return;

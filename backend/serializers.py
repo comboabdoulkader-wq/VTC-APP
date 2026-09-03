@@ -1,4 +1,5 @@
 """Dict -> API model serializers."""
+from catalog import SERVICES
 from models import DriverLocation, LocationIn, RideOut, UserOut
 
 
@@ -86,4 +87,16 @@ def ride_to_out(r: dict) -> RideOut:
         completed_at=r.get("completed_at"),
         rating=r.get("rating"),
         tip=r.get("tip"),
+        booking_ref=r.get("booking_ref"),
+        service_type=r.get("service_type", "private"),
+        service_label=SERVICES.get(r.get("service_type", "private"), SERVICES["private"])["label"],
+        hours=r.get("hours", 0),
+        passengers=r.get("passengers", 1),
+        children=r.get("children", 0),
+        child_seats=r.get("child_seats", 0),
+        luggage=r.get("luggage", 0),
+        fixed_price=bool(r.get("fixed_price")),
+        fixed_route_name=r.get("fixed_route_name"),
+        flight=r.get("flight"),
+        review=r.get("review"),
     )
