@@ -155,3 +155,75 @@ def booking_ref() -> str:
     import secrets
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return "RG-" + "".join(secrets.choice(alphabet) for _ in range(6))
+
+
+# ---- Legal pages (fr/en; other languages fall back to en). {company} / {email} are filled from env at request time. ----
+LEGAL = {
+    "fr": {
+        "terms": ("Conditions générales de vente", [
+            ("1. Objet", "{company} met en relation des clients avec des chauffeurs professionnels (VTC) pour des prestations de transport de personnes : transferts aéroport, trajets privés, mise à disposition, visites, événements et longue distance."),
+            ("2. Réservation", "La réservation est confirmée à réception du numéro de réservation (RG-XXXXXX). Le prix affiché avant confirmation est ferme et TTC ; il inclut les péages et frais d'approche. Les prix fixes (aéroports, Disneyland, Versailles…) ne varient pas en cas de trafic."),
+            ("3. Prix et paiement", "Le paiement s'effectue par carte bancaire (Visa, Mastercard, American Express, Apple Pay, Google Pay) via notre prestataire sécurisé Stripe, en espèces auprès du chauffeur, ou avec le crédit du portefeuille. Un reçu est disponible dans l'application."),
+            ("4. Attente et modifications", "Aéroports : 60 minutes d'attente incluses après l'atterrissage réel. Autres adresses : 15 minutes. Au-delà, l'attente est facturée au tarif horaire de la catégorie. Toute modification est possible via l'application ou le support."),
+            ("5. Responsabilités", "Les chauffeurs sont des professionnels détenteurs d'une carte VTC, d'une assurance responsabilité civile professionnelle et de documents contrôlés régulièrement par {company}. Le client s'engage à respecter le véhicule et le chauffeur."),
+            ("6. Réclamations", "Toute réclamation est à adresser à {email} avec le numéro de réservation. Litiges : droit français ; le client peut recourir gratuitement à un médiateur de la consommation."),
+        ]),
+        "privacy": ("Politique de confidentialité", [
+            ("Données collectées", "Nom, email, téléphone, adresses de prise en charge, position GPS pendant la course, informations de vol, historique des courses et paiements (les données de carte sont traitées uniquement par Stripe)."),
+            ("Utilisation", "Exécution des courses, sécurité (partage de la position avec le chauffeur), notifications, facturation, prévention de la fraude et amélioration du service. Aucune vente de données à des tiers."),
+            ("Conservation", "Données de compte conservées pendant la durée de la relation puis 3 ans ; documents comptables 10 ans conformément à la loi."),
+            ("Vos droits (RGPD)", "Accès, rectification, suppression, portabilité et opposition : écrivez à {email}. Vous pouvez supprimer votre compte depuis le support."),
+            ("Sous-traitants", "Stripe (paiement), Twilio (SMS), hébergement cloud sécurisé en Europe, service de notifications push."),
+        ]),
+        "cancellation": ("Conditions d'annulation", [
+            ("Avant acceptation", "Annulation gratuite tant qu'aucun chauffeur n'a accepté la course."),
+            ("Après acceptation", "Frais fixes de 3 € reversés au chauffeur déjà en route. Pour une course programmée, l'annulation reste gratuite jusqu'à 2 heures avant l'heure de prise en charge."),
+            ("Course en cours", "Une course démarrée ne peut pas être annulée ; le prix total est dû."),
+            ("Retard de vol", "Si vous avez renseigné votre numéro de vol, la prise en charge est décalée automatiquement sans frais, même en cas de retard important."),
+            ("Remboursements", "Les paiements par carte ou portefeuille sont remboursés automatiquement, déduction faite des frais éventuels, sous 5 à 10 jours ouvrés."),
+        ]),
+    },
+    "en": {
+        "terms": ("Terms of Service", [
+            ("1. Purpose", "{company} connects customers with professional licensed private drivers for airport transfers, private rides, hourly hire, city tours, events and long-distance trips."),
+            ("2. Booking", "A booking is confirmed once you receive a booking number (RG-XXXXXX). The price shown before confirmation is final and includes taxes, tolls and approach fees. Fixed prices (airports, Disneyland, Versailles…) never change because of traffic."),
+            ("3. Prices and payment", "Pay by card (Visa, Mastercard, American Express, Apple Pay, Google Pay) through our secure provider Stripe, in cash to the driver, or with your wallet credit. A receipt is available in the app."),
+            ("4. Waiting time and changes", "Airports: 60 minutes of waiting included after actual landing. Other addresses: 15 minutes. Beyond that, waiting is charged at the hourly rate of the category. Changes can be made in the app or via support."),
+            ("5. Liability", "Drivers are licensed professionals with professional liability insurance and documents regularly checked by {company}. Customers agree to respect the vehicle and the driver."),
+            ("6. Claims", "Send any claim to {email} with your booking number. Disputes are governed by French law; consumers may use a free consumer mediator."),
+        ]),
+        "privacy": ("Privacy Policy", [
+            ("Data we collect", "Name, email, phone, pickup addresses, GPS position during the ride, flight information, ride and payment history (card data is processed only by Stripe)."),
+            ("How we use it", "Performing rides, safety (sharing your position with the driver), notifications, invoicing, fraud prevention and service improvement. We never sell your data."),
+            ("Retention", "Account data is kept for the duration of the relationship plus 3 years; accounting records for 10 years as required by law."),
+            ("Your rights (GDPR)", "Access, rectification, deletion, portability and objection: write to {email}. You can delete your account through support."),
+            ("Processors", "Stripe (payments), Twilio (SMS), secure cloud hosting in Europe, push notification service."),
+        ]),
+        "cancellation": ("Cancellation Policy", [
+            ("Before acceptance", "Free cancellation as long as no driver has accepted the ride."),
+            ("After acceptance", "A fixed €3 fee paid to the driver already on the way. For scheduled rides, cancellation stays free until 2 hours before pickup."),
+            ("Ride in progress", "A started ride cannot be cancelled; the full price is due."),
+            ("Flight delays", "If you entered your flight number, the pickup is shifted automatically at no cost, even for long delays."),
+            ("Refunds", "Card and wallet payments are refunded automatically, minus any applicable fee, within 5 to 10 business days."),
+        ]),
+    },
+}
+
+# ---- Localized push/SMS notification templates by type (fr is written inline by the routes) ----
+NOTIF_I18N = {
+    "accepted": {"en": ("Driver found", "{driver} is on the way"), "es": ("Chófer encontrado", "{driver} está en camino"), "ar": ("تم العثور على سائق", "{driver} في الطريق"), "zh": ("已找到司机", "{driver} 正在赶来"), "pt": ("Motorista encontrado", "{driver} está a caminho")},
+    "started": {"en": ("Ride started", "Heading to your destination"), "es": ("Viaje iniciado", "Hacia su destino"), "ar": ("بدأت الرحلة", "في الطريق إلى وجهتك"), "zh": ("行程已开始", "正前往您的目的地"), "pt": ("Viagem iniciada", "A caminho do seu destino")},
+    "completed": {"en": ("Ride completed", "Thank you for riding with us – rate your driver!"), "es": ("Viaje finalizado", "Gracias por viajar con nosotros – ¡valore a su chófer!"), "ar": ("انتهت الرحلة", "شكراً لاختيارك لنا – قيّم سائقك!"), "zh": ("行程已完成", "感谢您的乘坐，请为司机评分！"), "pt": ("Viagem concluída", "Obrigado por viajar connosco – avalie o seu motorista!")},
+    "cancelled": {"en": ("Ride cancelled", "Your ride has been cancelled"), "es": ("Viaje cancelado", "Su viaje ha sido cancelado"), "ar": ("تم إلغاء الرحلة", "تم إلغاء رحلتك"), "zh": ("行程已取消", "您的行程已被取消"), "pt": ("Viagem cancelada", "A sua viagem foi cancelada")},
+    "arriving": {"en": ("Your driver is arriving", "Less than 2 minutes away – please be ready"), "es": ("Su chófer está llegando", "A menos de 2 minutos – esté listo"), "ar": ("سائقك يقترب", "أقل من دقيقتين – كن مستعداً"), "zh": ("司机即将到达", "不到 2 分钟 – 请准备好"), "pt": ("O seu motorista está a chegar", "A menos de 2 minutos – esteja pronto")},
+    "reminder": {"en": ("Upcoming ride", "Your scheduled ride starts soon"), "es": ("Próximo viaje", "Su viaje programado empieza pronto"), "ar": ("رحلة قادمة", "رحلتك المجدولة تبدأ قريباً"), "zh": ("即将开始的行程", "您预约的行程即将开始"), "pt": ("Viagem a chegar", "A sua viagem agendada começa em breve")},
+    "flight": {"en": ("Flight update", "Your driver is monitoring your flight"), "es": ("Actualización del vuelo", "Su chófer sigue su vuelo"), "ar": ("تحديث الرحلة الجوية", "سائقك يتابع رحلتك"), "zh": ("航班更新", "司机正在跟踪您的航班"), "pt": ("Atualização do voo", "O seu motorista acompanha o seu voo")},
+}
+
+
+def localize_notification(lang: str, type_: str, title: str, body: str, driver: str = "") -> tuple[str, str]:
+    """Return (title, body) in the user's language when a template exists; French text is kept otherwise."""
+    tpl = NOTIF_I18N.get(type_, {}).get(lang)
+    if not lang or lang == "fr" or not tpl:
+        return title, body
+    return tpl[0], tpl[1].replace("{driver}", driver or "")

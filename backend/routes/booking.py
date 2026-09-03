@@ -7,7 +7,7 @@ import os
 
 from fastapi import File, Response, UploadFile
 
-from catalog import CANCELLATION_POLICY, FAQ, SERVICE_LABELS, SERVICES, VEHICLES
+from catalog import CANCELLATION_POLICY, FAQ, LEGAL, SERVICE_LABELS, SERVICES, VEHICLES
 from core import current_user, db, new_id, now_utc
 from flights import configured as flights_configured, lookup_flight
 from models import FixedRouteIn
@@ -147,4 +147,16 @@ async def support_config(lang: str = "fr"):
         "hours": os.environ.get("SUPPORT_HOURS", "7j/7 · 6h–23h"),
         "languages": ["fr", "en", "es", "ar", "zh", "pt"],
         "faq": [{"q": q, "a": a} for q, a in faq],
+    }
+
+
+@router.get("/legal")
+async def legal(lang: str = "fr"):
+    pages = LEGAL.get(lang) or LEGAL["en"]
+    company = os.environ.get("COMPANY_NAME", "RideGo")
+    email = os.environ.get("SUPPORT_EMAIL") or "support@ridego.app"
+    fill = lambda t: t.replace("{company}", company).replace("{email}", email)
+    return {
+        "company_name": company, "email": email, "updated_at": "2026-06-01",
+        "pages": {k: {"title": v[0], "sections": [{"heading": h, "text": fill(t)} for h, t in v[1]]} for k, v in pages.items()},
     }

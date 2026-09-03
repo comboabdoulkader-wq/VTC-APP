@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 14 (legal pages + localized notifications + translated rides/profile/driver/company tabs) fully verified. Backend 4/4 pytest tests pass: GET /api/legal fr/en/zh(fallback) returns terms/privacy/cancellation each with title + >=5 sections, {company}/{email} placeholders replaced by 'RideGo' and support email; localized notifications work — ES title 'Chófer encontrado' + driver name + 'está en camino' on accept, 'Viaje iniciado' on start, 'Viaje finalizado' on complete; switching back to FR keeps inline 'Chauffeur trouvé'. Frontend: passenger 'My rides' title, English status badge (Completed), 'Book again' button, ride detail 'Ride completed', profile title 'Profile' all correct in EN; legal sheet opens with tabs terms/privacy/cancellation showing 'Terms of Service' and 'Cancellation Policy' pages and close (X) works. Driver tabs read Home / Private / Team / Documents / Earnings / Profile with 'Driver profile' title. Company tabs read Dashboard / Employees / Company. No boot console errors observed. Booking sheet on passenger home still renders (English service labels visible: Private Driver, Airport Transfer, ...).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "(passenger)/rides.tsx", "issues": ["Hardcoded French subtitle 'X en cours · suivi en temps réel' at line 55 – not switched with locale (out of iteration scope but worth noting)"]},
+      {"screen": "(passenger)/ride/[id].tsx", "issues": ["Chip labels like '1 passager', '0 bagage', 'Chauffeur privé' remain in French when language=en (out of iteration scope, but user-facing)"]},
+      {"screen": "(company)/index.tsx", "issues": ["Dashboard headline 'Déplacements professionnels · suivi en temps réel' and month labels still French when lang=en (out of iteration scope)"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration14.py", "/app/test_reports/pytest/iteration14.xml"],
+  "action_items": [
+    "Nothing blocking. Optional polish: translate remaining French-only labels on the rides list subtitle, ride detail chips ('N passager', 'N bagage'), and company dashboard heading/months when locale != fr."
+  ],
+  "critical_code_review_comments": [
+    "core.notify() reads user language before rendering, delegating to catalog.localize_notification — clean fallback (French kept if no template).",
+    "routes/booking.py::legal endpoint correctly replaces {company}/{email} tokens using COMPANY_NAME/SUPPORT_EMAIL env vars with sane defaults.",
+    "LegalSheet.tsx wires testIDs legal-sheet, legal-tab-*, legal-page-* enabling reliable UI verification."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration14.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "One fresh passenger + 2 rides (1 completed, 1 cancelled cleanup) created via API during backend tests. UI test created 1 additional fresh passenger + 1 completed ride (booking ref RG-GNYCQY).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Driver chauffeur@test.com login used twice in this run; each fresh test run creates a unique passenger email to avoid rate limits. Company entreprise@test.com locale preference persists on the backend (last set to fr by teardown). test_iteration14.py can be replayed as regression coverage for legal + localized notifications.",
+  "rca_of_issue": "N/A – no bug reproduced; iteration acceptance criteria met."
+}

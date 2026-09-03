@@ -7,6 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import RideSummary from "@/src/components/RideSummary";
 import ReviewForm, { ReviewPayload } from "@/src/components/passenger/ReviewForm";
 import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
@@ -18,15 +19,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Ride = any;
 
-const STATUS: Record<string, string> = {
-  requested: "Recherche d'un chauffeur…",
-  accepted: "Chauffeur en route",
-  in_progress: "Course en cours",
-  completed: "Course terminée",
-  cancelled: "Course annulée",
-};
 
 export default function RideDetail() {
+  const { t } = useI18n();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -129,7 +124,7 @@ export default function RideDetail() {
         <View style={styles.handle} />
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.statusRow}>
-            <Text style={styles.status}>{STATUS[ride.status] || ride.status}</Text>
+            <Text style={styles.status}>{t(`sd_${ride.status}` as any)}</Text>
             {ride.driver_eta_min != null && ["accepted", "in_progress"].includes(ride.status) && (
               <View style={[styles.etaPill, arriving && { backgroundColor: theme.color.success }]} testID="driver-eta">
                 <Icon name="clock-fast" size={14} color={arriving ? "#fff" : theme.color.onSurface} />
@@ -258,7 +253,7 @@ export default function RideDetail() {
           {["completed", "cancelled"].includes(ride.status) && (
             <Pressable testID="book-again" onPress={() => router.push({ pathname: "/(passenger)", params: { rebook: ride.id } } as any)} style={styles.secondary}>
               <Icon name="refresh" size={18} color={theme.color.onSurface} />
-              <Text style={styles.secondaryText}>Réserver à nouveau ce trajet</Text>
+              <Text style={styles.secondaryText}>{t("book_again")}</Text>
             </Pressable>
           )}
 

@@ -28,7 +28,7 @@ export default function CompanyProfile() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.color.surface }} testID="company-profile"
       contentContainerStyle={{ paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom + theme.spacing.xxl, paddingHorizontal: theme.spacing.xl }}>
-      <Text style={styles.title}>Entreprise</Text>
+      <Text style={styles.title}>{t("company")}</Text>
       <View style={styles.card}>
         <View style={styles.avatar}><Icon name="office-building" size={32} color="#fff" /></View>
         <Text style={styles.name}>{user.company_name}</Text>

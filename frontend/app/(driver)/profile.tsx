@@ -59,7 +59,7 @@ export default function DriverProfile() {
       contentContainerStyle={{ paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom + theme.spacing.xxl, paddingHorizontal: theme.spacing.xl }}
       testID="driver-profile-screen"
     >
-      <Text style={styles.title}>Profil chauffeur</Text>
+      <Text style={styles.title}>{t("driver_profile")}</Text>
 
       <View style={styles.card}>
         <Pressable testID="change-photo" onPress={changePhoto} style={styles.avatar}>

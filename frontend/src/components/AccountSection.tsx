@@ -5,20 +5,24 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 import { theme } from "@/src/theme";
 import AccountSettings from "@/src/components/AccountSettings";
 import HelpCenter from "@/src/components/HelpCenter";
+import LegalSheet from "@/src/components/LegalSheet";
 import { useI18n } from "@/src/i18n";
 
 /** "Mon compte" menu shared by all profile screens: personal info, security (password), help. */
 export default function AccountSection() {
   const [section, setSection] = useState<"info" | "security" | null>(null);
   const [help, setHelp] = useState(false);
+  const [legal, setLegal] = useState(false);
   const { t } = useI18n();
   return (
     <View style={styles.group} testID="account-section">
       <Row testID="menu-info" icon="account-edit-outline" label={t("personal_info")} onPress={() => setSection("info")} />
       <Row testID="menu-security" icon="shield-lock-outline" label={t("security")} hint={t("password")} onPress={() => setSection("security")} />
-      <Row testID="menu-help" icon="help-circle-outline" label={t("help")} last onPress={() => setHelp(true)} />
+      <Row testID="menu-help" icon="help-circle-outline" label={t("help")} onPress={() => setHelp(true)} />
+      <Row testID="menu-legal" icon="file-document-outline" label={t("legal")} last onPress={() => setLegal(true)} />
       <AccountSettings visible={section !== null} section={section || "info"} onClose={() => setSection(null)} />
       <HelpCenter visible={help} onClose={() => setHelp(false)} />
+      <LegalSheet visible={legal} onClose={() => setLegal(false)} />
     </View>
   );
 }

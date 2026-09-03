@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { fmtDateTime } from "@/src/utils/format";
 
@@ -17,15 +18,12 @@ type Ride = {
 
 const ACTIVE = ["requested", "accepted", "in_progress"];
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  requested: { label: "En attente", color: theme.color.warning },
-  accepted: { label: "Accepté", color: theme.color.success },
-  in_progress: { label: "En cours", color: theme.color.success },
-  completed: { label: "Terminée", color: theme.color.onSurfaceSecondary },
-  cancelled: { label: "Annulée", color: theme.color.error },
+const STATUS_COLORS: Record<string, string> = {
+  requested: theme.color.warning, accepted: theme.color.success, in_progress: theme.color.success, completed: theme.color.onSurfaceSecondary, cancelled: theme.color.error,
 };
 
 export default function Rides() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
@@ -53,7 +51,7 @@ export default function Rides() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]} testID="rides-screen">
       <View style={styles.header}>
-        <Text style={styles.title}>Mes courses</Text>
+        <Text style={styles.title}>{t("tab_rides")}</Text>
         {activeCount > 0 && <Text style={styles.subtitle}>{activeCount} en cours · suivi en temps réel</Text>}
       </View>
       {loading ? (
@@ -61,7 +59,7 @@ export default function Rides() {
       ) : rides.length === 0 ? (
         <View style={styles.empty}>
           <Icon name="car-off" size={56} color={theme.color.onSurfaceTertiary} />
-          <Text style={styles.emptyText}>Aucune course pour le moment</Text>
+          <Text style={styles.emptyText}>{t("no_rides")}</Text>
         </View>
       ) : (
         <FlatList
@@ -70,7 +68,7 @@ export default function Rides() {
           contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.md }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.color.onSurface} />}
           renderItem={({ item }) => {
-            const status = STATUS_LABELS[item.status] || STATUS_LABELS.completed;
+            const status = { color: STATUS_COLORS[item.status] || STATUS_COLORS.completed, label: t(`st_${item.status}` as any) };
             const isActive = ACTIVE.includes(item.status);
             return (
               <Pressable
@@ -104,13 +102,13 @@ export default function Rides() {
                   <Text style={styles.routeText} numberOfLines={1}>{item.dropoff.address}</Text>
                 </View>
                 <View style={styles.cardFooter}>
-                  <Text style={styles.driver}>{item.driver_name ? `${item.driver_name}${item.driver_eta_min != null && isActive ? ` · ${item.driver_eta_min} min` : ""}` : "En recherche"}</Text>
+                  <Text style={styles.driver}>{item.driver_name ? `${item.driver_name}${item.driver_eta_min != null && isActive ? ` · ${item.driver_eta_min} min` : ""}` : t("searching_driver")}</Text>
                   <Text style={styles.price}>{item.price.toFixed(2)} €</Text>
                 </View>
                 {!isActive && (
                   <Pressable testID={`book-again-${item.id}`} onPress={() => router.push({ pathname: "/(passenger)", params: { rebook: item.id } } as any)} style={styles.again} hitSlop={6}>
                     <Icon name="refresh" size={16} color={theme.color.onSurface} />
-                    <Text style={styles.againText}>Réserver à nouveau</Text>
+                    <Text style={styles.againText}>{t("book_again")}</Text>
                   </Pressable>
                 )}
               </Pressable>

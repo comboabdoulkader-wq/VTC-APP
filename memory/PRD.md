@@ -117,3 +117,8 @@ See /app/memory/test_credentials.md
 - i18n: `src/i18n` (fr/en/es/ar/zh/pt, auto-detect expo-localization, persisted, `useI18n().t()`), LanguagePicker in all profiles, `PATCH /auth/me {language}`. Translated: welcome, login, passenger tabs, home sheet core, TripDetails, VehicleCard, AccountSection, logout, service labels (backend). TODO: remaining screens (profile cards, rides list, ride detail, driver/company screens), notifications/SMS per user language, RTL layout for Arabic, FAQ in es/ar/zh/pt
 - Help center: `GET /support/config?lang=` (env COMPANY_NAME, SUPPORT_WHATSAPP, SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_HOURS – to fill), FAQ fr/en, WhatsApp/mail/tel deep links
 - Moderator CatalogAdmin (profiles → "Grille tarifaire & photos véhicules"): fixed routes CRUD, vehicle photo upload `POST /admin/vehicles/{type}/photo` (Object Storage, public `GET /vehicle-photos/{path}`)
+
+## Iteration 15 – translations extended, localized notifications, legal pages (DONE, tested)
+- i18n keys now cover statuses, tabs (passenger/driver/company), profile titles, legal; remaining FR strings: rides subtitle, RideSummary chips, company dashboard, driver/company inner screens, RideOptions, profile cards
+- Notifications localized via `catalog.NOTIF_I18N` (types accepted/started/completed/cancelled/arriving/reminder/flight) in `core.notify()`
+- Legal: `GET /legal?lang=` (terms/privacy/cancellation fr/en) → LegalSheet from AccountSection. Support contacts still to be provided by user (env SUPPORT_*)

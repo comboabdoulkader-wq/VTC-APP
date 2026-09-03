@@ -277,6 +277,11 @@ async def notify(user_id: Optional[str], type_: str, title: str, body: str, ride
     `sms_phone` texts an arbitrary number (e.g. private-ride client who has no account)."""
     if not user_id:
         return
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1, "phone": 1, "phone_verified": 1, "sms_enabled": 1, "language": 1})
+    if u and u.get("language", "fr") != "fr":
+        from catalog import localize_notification
+        driver = body.split(" arrive")[0] if type_ == "accepted" else ""
+        title, body = localize_notification(u["language"], type_, title, body, driver)
     doc = {
         "id": new_id(),
         "user_id": user_id,
@@ -288,7 +293,6 @@ async def notify(user_id: Optional[str], type_: str, title: str, body: str, ride
         "created_at": now_utc(),
     }
     await db.notifications.insert_one(doc)
-    u = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1, "phone": 1, "phone_verified": 1, "sms_enabled": 1})
     # Push notification (works on native builds; silently skipped when the relay is unavailable)
     from push import push_safe
     role = (u or {}).get("role")
