@@ -13,6 +13,10 @@ export type User = {
   full_name: string;
   role: Role;
   phone?: string;
+  phone_verified?: boolean;
+  sms_enabled?: boolean;
+  wallet_balance?: number;
+  referral_code?: string | null;
   vehicle_model?: string;
   license_plate?: string;
   rating: number;
@@ -53,6 +57,7 @@ type RegisterPayload = {
   vehicle_model?: string;
   license_plate?: string;
   company_name?: string;
+  referral_code?: string;
 };
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);

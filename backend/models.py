@@ -15,18 +15,40 @@ RideSource = Literal["platform", "private"]
 
 class RegisterIn(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=72)
+    password: str = Field(min_length=8, max_length=72)
     full_name: str = Field(min_length=1, max_length=80)
     role: Role
-    phone: Optional[str] = None
-    vehicle_model: Optional[str] = None
-    license_plate: Optional[str] = None
-    company_name: Optional[str] = None
+    phone: Optional[str] = Field(default=None, max_length=30)
+    vehicle_model: Optional[str] = Field(default=None, max_length=60)
+    license_plate: Optional[str] = Field(default=None, max_length=20)
+    company_name: Optional[str] = Field(default=None, max_length=80)
+    referral_code: Optional[str] = Field(default=None, max_length=12)
 
 
 class LoginIn(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(max_length=72)
+
+
+class ProfileUpdateIn(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    phone: Optional[str] = Field(default=None, max_length=30)
+    sms_enabled: Optional[bool] = None
+    vehicle_model: Optional[str] = Field(default=None, max_length=60)
+    license_plate: Optional[str] = Field(default=None, max_length=20)
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(max_length=72)
+    new_password: str = Field(min_length=8, max_length=72)
+
+
+class PhoneSendIn(BaseModel):
+    phone: str = Field(min_length=6, max_length=30)
+
+
+class PhoneVerifyIn(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
 
 
 class UserOut(BaseModel):
@@ -35,6 +57,8 @@ class UserOut(BaseModel):
     full_name: str
     role: Role
     phone: Optional[str] = None
+    phone_verified: bool = False
+    sms_enabled: bool = True
     vehicle_model: Optional[str] = None
     license_plate: Optional[str] = None
     rating: float = 5.0
@@ -47,6 +71,8 @@ class UserOut(BaseModel):
     docs_blocked: bool = False
     selfie_requested: bool = False
     has_photo: bool = False
+    wallet_balance: float = 0
+    referral_code: Optional[str] = None
     company_name: Optional[str] = None
     invite_code: Optional[str] = None
     company_id: Optional[str] = None
@@ -107,6 +133,7 @@ class RideCreateIn(BaseModel):
     payment_method: PaymentMethod = "cash"
     business: bool = False
     promo_code: Optional[str] = Field(default=None, max_length=20)
+    use_wallet: bool = False
 
 
 class RideBatchIn(BaseModel):
@@ -158,6 +185,10 @@ class RideOut(BaseModel):
     price_multiplier: float = 1.0
     city_name: Optional[str] = None
     tip_paid: bool = False
+    share_token: Optional[str] = None
+    cancellation_fee: float = 0
+    wallet_amount: float = 0
+    due_amount: float = 0
     assigned_by_name: Optional[str] = None
     created_at: datetime
     accepted_at: Optional[datetime] = None
@@ -205,7 +236,7 @@ class PrivateRideUpdateIn(BaseModel):
 # ---- Team ----
 class TeamMemberIn(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=72)
+    password: str = Field(min_length=8, max_length=72)
     full_name: str = Field(min_length=1, max_length=80)
     phone: Optional[str] = None
     vehicle_model: Optional[str] = None

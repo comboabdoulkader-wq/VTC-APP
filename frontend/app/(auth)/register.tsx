@@ -22,6 +22,8 @@ export default function Register() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [referral, setReferral] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +32,7 @@ export default function Register() {
     if (!fullName.trim() || !email.trim() || !password) {
       setError("Renseignez tous les champs requis"); return;
     }
-    if (password.length < 6) { setError("Mot de passe: 6 caractères minimum"); return; }
+    if (password.length < 8) { setError("Mot de passe : 8 caractères minimum"); return; }
     if (role === "driver" && (!vehicleModel.trim() || !licensePlate.trim())) {
       setError("Renseignez le modèle et la plaque du véhicule"); return;
     }
@@ -46,8 +48,10 @@ export default function Register() {
         vehicle_model: role === "driver" ? vehicleModel.trim() : undefined,
         license_plate: role === "driver" ? licensePlate.trim() : undefined,
         company_name: role === "company" ? companyName.trim() : undefined,
+        referral_code: referral.trim() || undefined,
       });
-      router.replace(homeFor(u.role) as any);
+      // A phone number was given → offer to verify it by SMS right away (skippable)
+      router.replace((phone.trim() ? "/(auth)/verify-phone" : homeFor(u.role)) as any);
     } catch (e: any) {
       setError(e.message || "Erreur d'inscription");
     } finally { setLoading(false); }
@@ -111,13 +115,18 @@ export default function Register() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Téléphone (optionnel)</Text>
-          <TextInput testID="phone-input" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+33 6 12 34 56 78" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
+          <Text style={styles.label}>Téléphone (recommandé · alertes SMS)</Text>
+          <TextInput testID="phone-input" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" placeholder="+33 6 12 34 56 78" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Mot de passe</Text>
-          <TextInput testID="password-input" value={password} onChangeText={setPassword} secureTextEntry placeholder="Min. 6 caractères" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.input} />
+          <View style={styles.pwdRow}>
+            <TextInput testID="password-input" value={password} onChangeText={setPassword} secureTextEntry={!showPwd} autoComplete="new-password" placeholder="Min. 8 caractères" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.input, { flex: 1 }]} />
+            <Pressable testID="toggle-password" onPress={() => setShowPwd((v) => !v)} style={styles.eye} hitSlop={8} accessibilityLabel={showPwd ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+              <Icon name={showPwd ? "eye-off-outline" : "eye-outline"} size={22} color={theme.color.onSurfaceSecondary} />
+            </Pressable>
+          </View>
         </View>
 
         {role === "driver" && (
@@ -132,6 +141,11 @@ export default function Register() {
             </View>
           </>
         )}
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Code de parrainage (optionnel)</Text>
+          <TextInput testID="referral-input" value={referral} onChangeText={(t) => setReferral(t.toUpperCase())} autoCapitalize="characters" maxLength={12} placeholder="Ex. A1B2C3" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.input, { letterSpacing: 2 }]} />
+        </View>
 
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
 
@@ -165,6 +179,8 @@ const styles = StyleSheet.create({
   field: { marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.onSurfaceSecondary, marginBottom: theme.spacing.sm },
   input: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 56, fontSize: 16, color: theme.color.onSurface },
+  pwdRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  eye: { width: 48, height: 56, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
   error: { color: theme.color.error, fontSize: 14, marginBottom: theme.spacing.md },
   primary: { backgroundColor: theme.color.brand, height: 56, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", marginTop: theme.spacing.md, marginBottom: theme.spacing.lg },
   primaryText: { color: theme.color.onBrand, fontWeight: "700", fontSize: 16 },

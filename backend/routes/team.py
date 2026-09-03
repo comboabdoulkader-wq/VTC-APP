@@ -117,7 +117,7 @@ async def assign_ride(data: AssignIn, user=Depends(driver_only)):
     await notify(m["id"], "assigned", "Nouvelle course affectée",
                  f"{user['full_name']} vous a affecté : {r['pickup']['address']} → {r['dropoff']['address']}", r["id"])
     await notify(r.get("passenger_id"), "accepted", "Chauffeur trouvé",
-                 f"{m['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", r["id"])
+                 f"{m['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", r["id"], sms=True)
     return ride_to_out(r)
 
 

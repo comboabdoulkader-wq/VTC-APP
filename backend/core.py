@@ -198,8 +198,81 @@ async def working_driver(user=Depends(current_user)) -> dict:
     return user
 
 
+# ---------- Rate limiting (in-memory, per process) ----------
+_RATE: dict[str, list[float]] = {}
+
+
+def rate_limit(key: str, limit: int, window_sec: int, message: str = "Trop de tentatives, réessayez plus tard"):
+    """Sliding-window limiter. Raises 429 when `limit` calls were made for `key` within `window_sec`."""
+    import time
+    now = time.time()
+    hits = [t for t in _RATE.get(key, []) if now - t < window_sec]
+    if len(hits) >= limit:
+        raise HTTPException(429, message)
+    hits.append(now)
+    _RATE[key] = hits
+    if len(_RATE) > 20000:  # keep memory bounded
+        for k in [k for k, v in _RATE.items() if not v or now - v[-1] > window_sec]:
+            _RATE.pop(k, None)
+
+
+def client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    return (fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?"))
+
+
+# ---------- Phone / SMS (Twilio) ----------
+DEFAULT_COUNTRY_CODE = os.environ.get("DEFAULT_COUNTRY_CODE", "+33")
+
+
+def normalize_phone(raw: str) -> Optional[str]:
+    """Return an E.164 number (+33612345678) or None when the input is not a plausible phone number."""
+    import re
+    s = re.sub(r"[\s().-]", "", raw or "")
+    if s.startswith("00"):
+        s = "+" + s[2:]
+    if s.startswith("0") and len(s) >= 9:
+        s = DEFAULT_COUNTRY_CODE + s[1:]
+    if not re.fullmatch(r"\+[1-9]\d{7,14}", s):
+        return None
+    return s
+
+
+def sms_configured() -> bool:
+    return bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN") and os.environ.get("TWILIO_FROM_NUMBER"))
+
+
+async def send_sms(phone: str, text: str) -> bool:
+    """SMS gateway. Uses Twilio when credentials are configured, otherwise logs only. Returns True when delivered to Twilio."""
+    import logging
+    log = logging.getLogger("sms")
+    if not sms_configured():
+        log.info("SMS (non envoyé, Twilio non configuré) -> %s: %s", phone, text)
+        return False
+    sid, token, sender = os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"], os.environ["TWILIO_FROM_NUMBER"]
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            res = await http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                data={"To": phone, "From": sender, "Body": text},
+                auth=(sid, token),
+            )
+        if res.status_code >= 400:
+            log.warning("Twilio error %s: %s", res.status_code, res.text[:200])
+            return False
+        await db.sms_log.insert_one({"id": new_id(), "to": phone, "sid": res.json().get("sid"), "created_at": now_utc()})
+        return True
+    except Exception as e:  # never break the ride flow because of SMS
+        log.warning("SMS failed: %s", e)
+        return False
+
+
 # ---------- Notifications ----------
-async def notify(user_id: Optional[str], type_: str, title: str, body: str, ride_id: Optional[str] = None, sms_phone: Optional[str] = None):
+async def notify(user_id: Optional[str], type_: str, title: str, body: str, ride_id: Optional[str] = None,
+                 sms_phone: Optional[str] = None, sms: bool = False):
+    """In-app notification. `sms=True` also texts the user if their number is verified and SMS alerts are enabled.
+    `sms_phone` texts an arbitrary number (e.g. private-ride client who has no account)."""
     if not user_id:
         return
     doc = {
@@ -213,26 +286,12 @@ async def notify(user_id: Optional[str], type_: str, title: str, body: str, ride
         "created_at": now_utc(),
     }
     await db.notifications.insert_one(doc)
-    if sms_phone:
-        await send_sms(sms_phone, f"{title} – {body}")
-
-
-async def send_sms(phone: str, text: str):
-    """SMS gateway. Uses Twilio when credentials are configured, otherwise logs only."""
-    import logging
-    sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    token = os.environ.get("TWILIO_AUTH_TOKEN")
-    sender = os.environ.get("TWILIO_FROM_NUMBER")
-    if not (sid and token and sender):
-        logging.getLogger("sms").info("SMS (non envoyé, Twilio non configuré) -> %s: %s", phone, text)
-        return
-    import httpx
-    try:
-        async with httpx.AsyncClient(timeout=10) as http:
-            await http.post(
-                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-                data={"To": phone, "From": sender, "Body": text},
-                auth=(sid, token),
-            )
-    except Exception as e:  # never break the ride flow because of SMS
-        logging.getLogger("sms").warning("SMS failed: %s", e)
+    text = f"RideGo · {title} – {body}"
+    if sms:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "phone": 1, "phone_verified": 1, "sms_enabled": 1})
+        if u and u.get("phone_verified") and u.get("sms_enabled", True) and u.get("phone"):
+            await send_sms(u["phone"], text)
+    elif sms_phone:
+        p = normalize_phone(sms_phone)
+        if p:
+            await send_sms(p, text)

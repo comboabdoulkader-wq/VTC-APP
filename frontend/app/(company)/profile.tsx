@@ -9,6 +9,9 @@ import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
 import PromosManager from "@/src/components/PromosManager";
+import WalletCard from "@/src/components/WalletCard";
+import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
+import AccountSection from "@/src/components/AccountSection";
 
 export default function CompanyProfile() {
   const insets = useSafeAreaInsets();
@@ -38,6 +41,10 @@ export default function CompanyProfile() {
         <Icon name="information-outline" size={18} color={theme.color.onSurfaceSecondary} />
         <Text style={styles.infoText}>Chaque employé réserve en autonomie dans la limite de son budget (jour, semaine ou mois). Vous suivez coûts, trajets et horaires en temps réel et exportez les relevés mensuels.</Text>
       </View>
+
+      <WalletCard />
+      <PhoneVerifyCard />
+      <AccountSection />
 
       <Pressable testID="open-promos" onPress={() => setShowPromos(true)} style={styles.menu}>
         <Icon name="ticket-percent-outline" size={22} color={theme.color.onSurface} />

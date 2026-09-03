@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 10 (Twilio SMS + phone OTP, wallet UI, security hardening) fully tested. Backend: 18/18 pytest tests pass (login+new fields, security headers X-Content-Type-Options/X-Frame-Options, /auth/phone/status, send-code with dev_code + rate-limit 3/10min per user + 422 on invalid phone, verify with wrong code 400 / correct 200 flip phone_verified true, PATCH /auth/me for sms_enabled/full_name/phone-reset, POST /auth/password wrong 401 / correct 200 then re-login works, register short password 422 + referral increments sponsor's referrals_count, brute-force login 9 fails last one 429, wallet payment: use_wallet:true sets wallet_amount=min(balance,price) + due_amount + wallet_tx 'ride_payment', cancel refunds 'refund', driver accept/start/complete with verified phone works, SMS logged only). Frontend (viewport 390x844): login toggle-password switches secure entry (type: password → text). Passenger Profil renders wallet-card (balance, referral_code DA0061, share), phone-card with phone-verified-badge + sms-switch + phone-edit, account-section with menu-info/menu-security/menu-help. Phone OTP E2E: phone-edit → phone-verify-input + phone-send-code → otp-dev-code shows 6-digit code (test mode banner) → otp-input + otp-verify → badge back + sms-switch toggled off/on. menu-info opens account-settings with settings-name/settings-save and header updates. menu-security opens Sécurité sheet with pwd-current/pwd-new/pwd-confirm/pwd-toggle: wrong current pwd → 'Mot de passe actuel incorrect' error visible, correct flow changes password (login with new pwd verified via API). Register has referral-input + toggle-password and phone number routes to verify-phone-screen with skip-phone → passenger-home. Booking wallet flow: wallet-toggle/wallet-switch appears when balance>0; enabling shows wallet-breakdown '−5.00 €'; confirm-ride-button creates ride; ride detail shows ride-wallet-row 'Portefeuille récompenses −5.00 €' + 'Reste à payer 6.54 €'; cancel refunds. Driver and Company Profil tabs both render wallet-card, phone-card, account-section without crash.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "app-wide", "issues": ["React 19 console warning 'shadow*' style props are deprecated (use 'boxShadow') repeated across renders", "React 19 console warning 'Accessing element.ref was removed in React 19. ref is now a regular prop.' recurring on almost every screen (RN Web / library not yet React 19 ready)"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10.py",
+    "/app/test_reports/pytest/iteration10.xml"
+  ],
+  "action_items": [
+    "(Cosmetic) Investigate React 19 'element.ref' and 'shadow* deprecated' console warnings — likely a lib version (react-native-web or a UI dep). Update deps or add polyfill/wrappers to avoid future breakage.",
+    "(Nice-to-have) Password change modal could clear inputs/close on success (currently stays open); not blocking.",
+    "(Rate-limit UX) Password change limiter is per user id (5/15min); back-to-back testing quickly hits 429 → consider slightly relaxing or resetting on successful login."
+  ],
+  "critical_code_review_comments": [
+    "auth.py: OTP hash includes user_id which is good (prevents cross-user replay); OTP TTL 10 min and max 5 attempts are sensible.",
+    "core.rate_limit is process-local; multi-worker deployments would need a shared store (Redis) — acceptable for MVP.",
+    "rides.apply_wallet correctly caps wallet_amount to price and calls credit_wallet with negative amount which decreases balance and inserts a 'ride_payment' transaction.",
+    "cancel_ride refunds wallet_amount minus cancellation fee (never negative). Good.",
+    "server sets X-Content-Type-Options: nosniff and X-Frame-Options: DENY headers globally. Confirmed via curl and pytest."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10.py (new)"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% (all requested flows verified)"},
+  "seed_data_creation": "Created transient TEST_* users for OTP/rate-limit and register-with-referral tests; created a testwallet_* passenger to exercise wallet booking flow (credited 5.0 € then reset); all removed at end. passager@test.com wallet reset to 0.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login rate-limit for passager@test.com is 8 fails / 15 min per email AND 30 / 15 min per IP; testing agents SHOULD reuse a single session-scoped token instead of re-logging in for each test, and use fresh emails for brute-force tests. Password change limiter is 5 / 15 min per user id — do not chain more than 4 password changes in a run. To restore password quickly if hit, update password_hash directly in Mongo with bcrypt (see the helper used in cleanup)."
+}

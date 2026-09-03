@@ -9,24 +9,28 @@ import { apiFetch, useAuth } from "@/src/context/auth";
 
 type Ride = any;
 
-type Earnings = { total: number; commission: number; net: number; rides_count: number; commission_rate: number; platform: { count: number; gross: number }; private: { count: number; gross: number; commission: number } };
+type Stats = { online_hours_week: number; online_hours_total: number; acceptance_rate: number | null; accepted: number; declined: number; completed: number; completion_rate: number | null; best_slots: { label: string; count: number; earnings: number }[]; earnings_by_day: { day: string; amount: number }[]; avg_rating: number };
+type Earnings = { cancellation_fees?: number; total: number; commission: number; net: number; rides_count: number; commission_rate: number; platform: { count: number; gross: number }; private: { count: number; gross: number; commission: number } };
 const EMPTY: Earnings = { total: 0, commission: 0, net: 0, rides_count: 0, commission_rate: 0.15, platform: { count: 0, gross: 0 }, private: { count: 0, gross: 0, commission: 0 } };
 
 export default function Earnings() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const [earnings, setEarnings] = useState<Earnings>(EMPTY);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [e, r] = await Promise.all([
+      const [e, r, st] = await Promise.all([
         apiFetch<any>("/driver/earnings", {}, token),
         apiFetch<Ride[]>("/rides/mine", {}, token),
+        apiFetch<Stats>("/driver/stats", {}, token).catch(() => null),
       ]);
       setEarnings(e);
+      setStats(st);
       setRides(r.filter((x) => x.status === "completed"));
     } catch {} finally { setLoading(false); setRefreshing(false); }
   }, [token]);
@@ -62,6 +66,33 @@ export default function Earnings() {
           <Text style={[styles.splitMeta, { color: theme.color.warning }]}>− {earnings.private.commission.toFixed(2)} € ({Math.round(earnings.commission_rate * 100)} %)</Text>
         </View>
       </View>
+
+      {stats && (
+        <View testID="driver-stats">
+          <Text style={styles.section}>Statistiques</Text>
+          <View style={styles.split}>
+            <View style={styles.splitCard}><Icon name="clock-outline" size={20} color={theme.color.onSurface} /><Text style={styles.splitLabel}>En ligne (7 j)</Text><Text style={styles.splitVal}>{stats.online_hours_week} h</Text><Text style={styles.splitMeta}>{stats.online_hours_total} h au total</Text></View>
+            <View style={styles.splitCard}><Icon name="check-decagram-outline" size={20} color={theme.color.onSurface} /><Text style={styles.splitLabel}>Acceptation</Text><Text style={styles.splitVal}>{stats.acceptance_rate == null ? "—" : `${stats.acceptance_rate} %`}</Text><Text style={styles.splitMeta}>{stats.accepted} acceptées · {stats.declined} refusées</Text></View>
+          </View>
+          <View style={styles.splitCard}>
+            <Text style={styles.splitLabel}>Meilleurs créneaux de la semaine</Text>
+            {stats.best_slots.length === 0 ? <Text style={styles.splitMeta}>Terminez des courses pour découvrir vos meilleurs créneaux</Text> : stats.best_slots.map((b, i) => (
+              <View key={b.label} style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+                <Text style={styles.rowAddr}>{["🥇", "🥈", "🥉"][i]} {b.label}</Text>
+                <Text style={styles.rowPrice}>{b.earnings.toFixed(2)} € · {b.count} course{b.count > 1 ? "s" : ""}</Text>
+              </View>
+            ))}
+            <View style={{ flexDirection: "row", gap: 4, marginTop: theme.spacing.md, alignItems: "flex-end", height: 60 }}>
+              {stats.earnings_by_day.map((d) => { const max = Math.max(...stats.earnings_by_day.map((x) => x.amount), 1); return (
+                <View key={d.day} style={{ flex: 1, alignItems: "center" }}>
+                  <View style={{ width: "70%", height: Math.max(4, (d.amount / max) * 44), backgroundColor: d.amount > 0 ? theme.color.brand : theme.color.border, borderRadius: 3 }} />
+                  <Text style={{ fontSize: 9, color: theme.color.onSurfaceTertiary, marginTop: 2 }}>{d.day}</Text>
+                </View>); })}
+            </View>
+          </View>
+          {(earnings.cancellation_fees || 0) > 0 && <Text style={[styles.splitMeta, { marginTop: theme.spacing.sm }]}>+ {earnings.cancellation_fees!.toFixed(2)} € de frais d'annulation perçus</Text>}
+        </View>
+      )}
 
       <Text style={styles.section}>Historique</Text>
       {loading ? (

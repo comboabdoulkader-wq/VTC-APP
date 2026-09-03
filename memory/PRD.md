@@ -73,3 +73,19 @@ See /app/memory/test_credentials.md
 - Promo codes (`routes/extras.py`): admins create platform-wide codes, companies create employee-only codes (apply only on business rides); percent or fixed amount, max uses, expiry, min price; `POST /promos/validate`; ride creation accepts `promo_code` → `discount_amount`, price reduced; UI PromosManager (company profile + moderator profiles) and promo input in RideOptions + breakdown
 - Pricing zones: `cities.price_multiplier` (0.5–3.0) editable by moderators in CitiesModeration; estimate/ride base price × multiplier; ride stores `price_multiplier`, `city_name`
 - Tips: rating box offers tip chips (0/1/2/5/10 €); `POST /rides/{id}/rate {rating, tip}`; card rides → Stripe checkout `kind: "tip"` (payments keyed by ride_id+kind), `tip_paid`, driver notified; cash tips recorded; earnings already include tips
+
+## Iteration 9 additions (`routes/passenger_extras.py`)
+- Favorites: `GET/POST/DELETE /favorites` (one address per label Maison/Travail; custom labels); shown at top of the passenger address list with star icon; save via ☆ on any result; delete via trash
+- Cancellation fee: passenger cancelling after driver acceptance → `cancellation_fee` 3 € (constant CANCEL_FEE) credited to the driver (earnings `cancellation_fees`); cannot cancel in_progress; UI warning Alert before cancelling + hint under the button
+- Driver stats: online sessions (`driver_sessions`, `users.online_since`), `POST /rides/{id}/decline` (hides request, counts for acceptance rate), `GET /driver/stats` (online hours 7d/total, acceptance rate, completion, best weekday/2h slots by earnings, earnings by day) displayed in Gains tab
+- Ride sharing: every ride has `share_token`; public `GET /public/track/{token}` (no auth, limited fields); public page `/track/{token}` polling 5 s; "Partager mon trajet à un proche" button (native Share / web share or clipboard)
+
+## Iteration 10 additions – Twilio SMS, phone OTP, wallet UI, security hardening
+- Twilio SMS gateway (`core.send_sms`, env TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER, DEFAULT_COUNTRY_CODE=+33). Without keys → test mode: SMS logged, OTP code returned as `dev_code` and shown in the app
+- Phone verification by SMS OTP: `POST /auth/phone/send-code {phone}` (E.164 normalisation, 3/10 min per user), `POST /auth/phone/verify {code}` (6 digits, HMAC hash, 10 min TTL, 5 attempts), `GET /auth/phone/status`
+- SMS alerts (only if phone verified + `sms_enabled`): driver arriving (≤2 min), ride accepted (incl. team assignment), started, completed, scheduled-ride reminder. Toggle in profile (PhoneVerifyCard)
+- Post-signup screen `(auth)/verify-phone` when a phone was given (skippable). Register accepts referral code
+- `PATCH /auth/me` (name, phone → re-verify, sms_enabled, vehicle for drivers), `POST /auth/password` (current + new ≥ 8)
+- Wallet UI: WalletCard in passenger/driver/company profiles; "Utiliser mon crédit" toggle in RideOptions (`use_wallet`), breakdown shows wallet part + "Reste à payer"; ride detail shows wallet row and card button charges `due_amount`
+- Security: login rate limit (8 / 15 min per account, 30 / 15 min per IP), register 10/h per IP, OTP + password change limits, password ≥ 8 chars, JWT_SECRET in backend/.env, security headers middleware, CORS without credentials, input length limits
+- UX: password visibility toggle (login/register), functional profile menu (AccountSection → AccountSettings sheet), wide-screen frame (≥ 820 px → centred 480 px column)

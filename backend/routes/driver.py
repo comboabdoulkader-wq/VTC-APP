@@ -21,6 +21,12 @@ async def driver_status(data: DriverStatusIn, user=Depends(driver_only)):
     update = {"is_online": data.is_online}
     if data.lat is not None and data.lng is not None:
         update["last_location"] = {"lat": data.lat, "lng": data.lng, "updated_at": now_utc()}
+    # Online sessions for driver statistics
+    if data.is_online and not user.get("online_since"):
+        update["online_since"] = now_utc()
+    if not data.is_online and user.get("online_since"):
+        await db.driver_sessions.insert_one({"driver_id": user["id"], "start": user["online_since"], "end": now_utc()})
+        update["online_since"] = None
     await db.users.update_one({"id": user["id"]}, {"$set": update})
     return {"ok": True, "is_online": data.is_online}
 
@@ -47,7 +53,7 @@ async def driver_location(data: LocationUpdateIn, user=Depends(driver_only)):
         await notify(
             ride.get("passenger_id"), "arriving", "Votre chauffeur arrive",
             f"{user['full_name']} est à moins de {ARRIVAL_ALERT_MIN} min ({ride['driver_vehicle']} · {ride['driver_plate']})",
-            ride["id"], sms_phone=ride.get("passenger_phone"),
+            ride["id"], sms=True,
         )
     return {"ok": True, "eta_min": eta, "arrival_alert": arrival_alert}
 
@@ -55,7 +61,9 @@ async def driver_location(data: LocationUpdateIn, user=Depends(driver_only)):
 @router.get("/earnings")
 async def driver_earnings(user=Depends(driver_only)):
     cursor = db.rides.find({"driver_id": user["id"], "status": "completed"}, {"_id": 0})
-    out = {"platform": {"count": 0, "gross": 0.0}, "private": {"count": 0, "gross": 0.0, "commission": 0.0}}
+    out = {"platform": {"count": 0, "gross": 0.0}, "private": {"count": 0, "gross": 0.0, "commission": 0.0}, "cancellation_fees": 0.0}
+    async for c in db.rides.find({"driver_id": user["id"], "status": "cancelled", "cancellation_fee": {"$gt": 0}}, {"_id": 0, "cancellation_fee": 1}):
+        out["cancellation_fees"] += c["cancellation_fee"]
     async for r in cursor:
         amt = r.get("price", 0) + (r.get("tip") or 0)
         if r.get("source") == "private":
@@ -65,9 +73,10 @@ async def driver_earnings(user=Depends(driver_only)):
         else:
             out["platform"]["count"] += 1
             out["platform"]["gross"] += amt
-    gross = out["platform"]["gross"] + out["private"]["gross"]
+    gross = out["platform"]["gross"] + out["private"]["gross"] + out["cancellation_fees"]
     commission = out["private"]["commission"]
-    for k in out.values():
+    out["cancellation_fees"] = round(out["cancellation_fees"], 2)
+    for k in (out["platform"], out["private"]):
         for kk in k:
             k[kk] = round(k[kk], 2)
     return {

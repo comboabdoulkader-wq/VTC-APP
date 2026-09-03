@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core import REMINDER_MIN, client, db, notify, now_utc, seed_cities
-from routes import auth, company, documents, driver, extras, geo_routes, notifications, payments, rides, team
+from routes import auth, company, documents, driver, extras, geo_routes, notifications, passenger_extras, payments, referral, rides, team
 from routes.documents import compliance_sweep
 from storage import init_storage
 
@@ -22,14 +22,27 @@ async def root():
     return {"message": "VTC API", "status": "ok"}
 
 
-for r in (auth.router, rides.router, driver.router, team.router, payments.router, notifications.router, company.router, geo_routes.router, documents.router, extras.router):
+for r in (auth.router, rides.router, driver.router, team.router, payments.router, notifications.router, company.router, geo_routes.router, documents.router, extras.router, passenger_extras.router, referral.router):
     api.include_router(r)
 
 app.include_router(api)
 
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=()"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+# Bearer tokens only (no cookies) → wildcard origins are safe and credentials are not needed.
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,9 +60,9 @@ async def reminder_loop():
                 await db.rides.update_one({"id": r["id"]}, {"$set": {"reminder_sent": True}})
                 when = r["scheduled_at"].strftime("%H:%M")
                 await notify(r.get("passenger_id"), "reminder", f"Course programmée à {when}",
-                             f"Départ dans {REMINDER_MIN} min : {r['pickup']['address']} → {r['dropoff']['address']}", r["id"], sms_phone=r.get("passenger_phone"))
+                             f"Départ dans {REMINDER_MIN} min : {r['pickup']['address']} → {r['dropoff']['address']}", r["id"], sms=True)
                 await notify(r.get("driver_id"), "reminder", f"Course programmée à {when}",
-                             f"Prise en charge dans {REMINDER_MIN} min : {r['pickup']['address']} ({r.get('passenger_label') or r['passenger_name']})", r["id"])
+                             f"Prise en charge dans {REMINDER_MIN} min : {r['pickup']['address']} ({r.get('passenger_label') or r['passenger_name']})", r["id"], sms=True)
         except Exception as e:  # keep the loop alive
             logging.getLogger("reminders").warning("reminder loop error: %s", e)
         await asyncio.sleep(60)

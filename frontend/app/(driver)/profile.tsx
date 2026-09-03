@@ -9,6 +9,9 @@ import { useAuth } from "@/src/context/auth";
 import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
 import PromosManager from "@/src/components/PromosManager";
+import WalletCard from "@/src/components/WalletCard";
+import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
+import AccountSection from "@/src/components/AccountSection";
 import { getNavApp, setNavApp, NavApp, pickImage, uploadDocument } from "@/src/utils/files";
 
 export default function DriverProfile() {
@@ -90,6 +93,10 @@ export default function DriverProfile() {
           <Text style={styles.vehiclePlate}>{user.license_plate || "—"}</Text>
         </View>
       </View>
+
+      <WalletCard />
+      <PhoneVerifyCard />
+      <AccountSection />
 
             <View style={[styles.menuGroup, { padding: theme.spacing.lg }]} testID="nav-preference">
         <Text style={{ fontSize: 15, fontWeight: "700", color: theme.color.onSurface, marginBottom: 4 }}>Navigation GPS par défaut</Text>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert, Image, Share, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
@@ -52,8 +52,23 @@ export default function RideDetail() {
     return () => clearInterval(t);
   }, [ride?.status, load]);
 
-  const cancel = async () => {
-    try { await apiFetch(`/rides/${id}/cancel`, { method: "POST" }, token); router.replace("/(passenger)/rides"); } catch {}
+  const doCancel = async () => {
+    try { await apiFetch(`/rides/${id}/cancel`, { method: "POST" }, token); router.replace("/(passenger)/rides"); } catch (e: any) { Alert.alert("Annulation", e.message); }
+  };
+  const cancel = () => {
+    if (ride?.status === "accepted") {
+      Alert.alert("Frais d'annulation", `Un chauffeur a déjà accepté votre course. Des frais d'annulation de 3,00 € seront appliqués${ride.payment_method === "card" ? " (prélevés par carte)" : " (à régler au chauffeur)"}. Confirmer ?`,
+        [{ text: "Garder ma course", style: "cancel" }, { text: "Annuler quand même (3 €)", style: "destructive", onPress: doCancel }]);
+    } else doCancel();
+  };
+  const shareTrip = async () => {
+    const url = `${process.env.EXPO_PUBLIC_BACKEND_URL}/track/${ride?.share_token}`;
+    const message = `Suivez mon trajet en direct : ${url}`;
+    try {
+      if (Platform.OS === "web" && (navigator as any).share) await (navigator as any).share({ title: "Suivi de mon trajet", text: message, url });
+      else if (Platform.OS === "web") { await (navigator as any).clipboard?.writeText(url); Alert.alert("Lien copié", url); }
+      else await Share.share({ message, url });
+    } catch {}
   };
 
   const submitRating = async () => {
@@ -167,6 +182,12 @@ export default function RideDetail() {
             </View>
           ) : null}
 
+          {["requested", "accepted", "in_progress"].includes(ride.status) && ride.share_token && (
+            <Pressable testID="share-trip" onPress={shareTrip} style={styles.shareBtn}>
+              <Icon name="share-variant-outline" size={18} color={theme.color.onSurface} />
+              <Text style={styles.shareText}>Partager mon trajet à un proche</Text>
+            </Pressable>
+          )}
           {ride.driver_id && ["accepted", "in_progress"].includes(ride.status) && (
             <ChatButton rideId={ride.id} onPress={() => setChatOpen(true)} label={`Écrire à ${ride.driver_name}`} />
           )}
@@ -187,6 +208,9 @@ export default function RideDetail() {
             {ride.discount_amount > 0 && (
               <View style={styles.priceRow}><Text style={[styles.priceLabel, { color: theme.color.success }]}>Code {ride.promo_code}</Text><Text style={[styles.priceSmall, { color: theme.color.success }]}>−{money(ride.discount_amount)}</Text></View>
             )}
+            {ride.cancellation_fee > 0 && (
+              <View style={styles.priceRow}><Text style={[styles.priceLabel, { color: theme.color.error }]}>Frais d'annulation</Text><Text style={[styles.priceSmall, { color: theme.color.error }]}>{money(ride.cancellation_fee)}</Text></View>
+            )}
             {ride.tip > 0 && (
               <View style={styles.priceRow}><Text style={styles.priceLabel}>Pourboire {ride.tip_paid ? "(payé par carte)" : ride.payment_method === "cash" ? "(en espèces)" : ""}</Text><Text style={styles.priceSmall}>+{money(ride.tip)}</Text></View>
             )}
@@ -194,6 +218,12 @@ export default function RideDetail() {
               <Text style={styles.priceTotalLabel}>Total</Text>
               <Text style={styles.priceValue}>{money(ride.price)}</Text>
             </View>
+            {ride.wallet_amount > 0 && (
+              <>
+                <View style={styles.priceRow} testID="ride-wallet-row"><Text style={[styles.priceLabel, { color: theme.color.success }]}>Portefeuille récompenses</Text><Text style={[styles.priceSmall, { color: theme.color.success }]}>−{money(ride.wallet_amount)}</Text></View>
+                <View style={styles.priceRow}><Text style={[styles.priceLabel, { fontWeight: "700", color: theme.color.onSurface }]}>Reste à payer</Text><Text style={[styles.priceSmall, { fontWeight: "800" }]}>{money(ride.due_amount)}</Text></View>
+              </>
+            )}
             <View style={styles.payRow}>
               <Icon name={ride.payment_method === "card" ? "credit-card-outline" : "cash"} size={16} color={theme.color.onSurfaceSecondary} />
               <Text style={styles.payText}>
@@ -207,7 +237,7 @@ export default function RideDetail() {
               {paying ? <ActivityIndicator color="#fff" /> : (
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                   <Icon name="lock" size={16} color="#fff" />
-                  <Text style={styles.primaryText}>Payer par carte • {money(ride.price)}</Text>
+                  <Text style={styles.primaryText}>Payer par carte • {money(ride.due_amount ?? ride.price)}</Text>
                 </View>
               )}
             </Pressable>
@@ -238,9 +268,12 @@ export default function RideDetail() {
           )}
 
           {canCancel && (
-            <Pressable testID="cancel-ride" onPress={cancel} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Annuler la course</Text>
-            </Pressable>
+            <>
+              <Pressable testID="cancel-ride" onPress={cancel} style={styles.cancelBtn}>
+                <Text style={styles.cancelText}>Annuler la course</Text>
+              </Pressable>
+              <Text style={styles.cancelHint}>{ride.status === "accepted" ? "⚠️ Frais d'annulation : 3,00 € (chauffeur déjà en route)" : "Annulation gratuite tant qu'aucun chauffeur n'a accepté"}</Text>
+            </>
           )}
         </ScrollView>
       </View>
@@ -297,6 +330,9 @@ const styles = StyleSheet.create({
   tipText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   primary: { backgroundColor: theme.color.brand, height: 50, paddingHorizontal: theme.spacing.xl, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", alignSelf: "stretch", marginBottom: theme.spacing.md },
   primaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  shareBtn: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", height: 44, borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary, marginBottom: theme.spacing.md },
+  shareText: { fontWeight: "700", color: theme.color.onSurface, fontSize: 14 },
+  cancelHint: { fontSize: 12, color: theme.color.onSurfaceTertiary, textAlign: "center", marginTop: theme.spacing.sm },
   cancelBtn: { height: 52, borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   cancelText: { color: theme.color.error, fontWeight: "700", fontSize: 15 },
 });

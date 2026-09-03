@@ -12,6 +12,7 @@ import { apiFetch, useAuth } from "@/src/context/auth";
 import RideOptions, { DEFAULT_OPTIONS, RideOptionsValue, Surcharge, Budget } from "@/src/components/passenger/RideOptions";
 import { useMyPosition } from "@/src/hooks/useMyPosition";
 import { useAddressSearch } from "@/src/hooks/useAddressSearch";
+import SheetModal from "@/src/components/ui/SheetModal";
 import { money, fmtDateTime, VEHICLE_ICON } from "@/src/utils/format";
 
 type Estimate = { vehicle_type: "standard" | "premium" | "van"; label: string; price: number; distance_km: number; duration_min: number; eta_min: number };
@@ -29,6 +30,7 @@ const toPayload = (it: CartItem) => ({
   payment_method: it.options.paymentMethod,
   business: it.options.business,
   promo_code: it.options.promoCode || null,
+  use_wallet: it.options.useWallet && !it.options.business,
 });
 const itemTotal = (it: CartItem) => Math.max(it.vehicle.price + (it.options.surchargeEnabled ? it.surcharge.amount : 0) - (it.options.promoCode ? it.options.discount : 0), 0);
 
@@ -53,7 +55,22 @@ export default function PassengerHome() {
   const [showCart, setShowCart] = useState(false);
   const [cardEnabled, setCardEnabled] = useState(false);
   const [budget, setBudget] = useState<Budget | null>(null);
+  const [walletBalance, setWalletBalance] = useState(0);
   const gps = useMyPosition();
+  const [favorites, setFavorites] = useState<(Place & { label: string; icon: string })[]>([]);
+  const [saveFav, setSaveFav] = useState<Place | null>(null);
+  const [favLabel, setFavLabel] = useState("Maison");
+  const [favCustom, setFavCustom] = useState("");
+  const loadFavorites = useCallback(() => apiFetch<any[]>("/favorites", {}, token).then((l) => setFavorites(l.map((f) => ({ id: `fav-${f.id}`, favId: f.id, name: f.label, address: f.address, lat: f.lat, lng: f.lng, label: f.label, icon: f.icon })))).catch(() => {}), [token]);
+  const saveFavorite = async () => {
+    if (!saveFav) return;
+    const label = favLabel === "Autre" ? favCustom.trim() || "Autre" : favLabel;
+    try {
+      await apiFetch("/favorites", { method: "POST", body: JSON.stringify({ label, name: saveFav.name, address: saveFav.address, lat: saveFav.lat, lng: saveFav.lng, icon: favLabel === "Maison" ? "home" : favLabel === "Travail" ? "briefcase" : "star" }) }, token);
+      setSaveFav(null); setFavCustom(""); loadFavorites();
+    } catch (e: any) { Alert.alert("Erreur", e.message); }
+  };
+  const removeFavorite = async (favId: string) => { try { await apiFetch(`/favorites/${favId}`, { method: "DELETE" }, token); loadFavorites(); } catch {} };
   const { results: geoResults, searching } = useAddressSearch(query, pickup);
 
   // GPS position becomes the default pickup as soon as it is known
@@ -67,6 +84,8 @@ export default function PassengerHome() {
     let alive = true;
     apiFetch<any[]>("/rides/active-list", {}, token).then((r) => alive && setActiveCount(r.length)).catch(() => {});
     apiFetch<any>("/company/my-budget", {}, token).then((b) => alive && setBudget(b.company ? b : null)).catch(() => {});
+    apiFetch<any>("/wallet", {}, token).then((w) => alive && setWalletBalance(w.balance || 0)).catch(() => {});
+    loadFavorites();
     return () => { alive = false; };
   }, [token]));
 
@@ -78,12 +97,12 @@ export default function PassengerHome() {
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = searchMode === "pickup" ? [gps.place || DEFAULT_PICKUP, ...POPULAR_PLACES] : POPULAR_PLACES;
+    const base = searchMode === "pickup" ? [gps.place || DEFAULT_PICKUP, ...favorites, ...POPULAR_PLACES] : [...favorites, ...POPULAR_PLACES];
     if (!q) return base;
     const local = base.filter((p) => p.name.toLowerCase().includes(q) || p.address.toLowerCase().includes(q));
     const seen = new Set(local.map((p) => p.id));
     return [...local, ...geoResults.filter((p) => !seen.has(p.id))];
-  }, [query, searchMode, gps.place, geoResults]);
+  }, [query, searchMode, gps.place, geoResults, favorites]);
 
   const loadEstimate = async (from: Place, to: Place) => {
     setLoadingEstimate(true);
@@ -247,11 +266,16 @@ export default function PassengerHome() {
               ListEmptyComponent={<Text style={styles.placeAddr}>{searching ? "Recherche…" : query.trim().length >= 3 ? "Aucune adresse trouvée" : "Tapez au moins 3 caractères"}</Text>}
               renderItem={({ item }) => (
                 <Pressable testID={`place-${item.id}`} style={styles.placeRow} onPress={() => choosePlace(item)}>
-                  <View style={styles.placeIcon}><Icon name={item.id === "gps" ? "crosshairs-gps" : item.id === "current" ? "city-variant-outline" : "map-marker-outline"} size={22} color={theme.color.onSurface} /></View>
+                  <View style={styles.placeIcon}><Icon name={item.id === "gps" ? "crosshairs-gps" : item.id === "current" ? "city-variant-outline" : (item as any).icon || "map-marker-outline"} size={22} color={(item as any).favId ? theme.color.star : theme.color.onSurface} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.placeName}>{item.name}</Text>
                     <Text style={styles.placeAddr} numberOfLines={1}>{item.address}</Text>
                   </View>
+                  {(item as any).favId ? (
+                    <Pressable testID={`fav-delete-${(item as any).favId}`} onPress={() => removeFavorite((item as any).favId)} hitSlop={8}><Icon name="trash-can-outline" size={18} color={theme.color.onSurfaceTertiary} /></Pressable>
+                  ) : query.trim().length >= 3 || item.id !== "current" ? (
+                    <Pressable testID={`fav-save-${item.id}`} onPress={() => { setSaveFav(item); setFavLabel("Maison"); }} hitSlop={8}><Icon name="star-outline" size={18} color={theme.color.onSurfaceTertiary} /></Pressable>
+                  ) : null}
                 </Pressable>
               )} />
           </BottomSheetView>
@@ -289,14 +313,14 @@ export default function PassengerHome() {
             )}
 
             {selected && surcharge && (
-              <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} budget={budget} />
+              <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} budget={budget} walletBalance={walletBalance} />
             )}
 
             <Pressable testID="confirm-ride-button" disabled={!selected || confirming} onPress={orderNow}
               style={({ pressed }) => [styles.confirmBtn, (!selected || confirming) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}>
               {confirming ? <ActivityIndicator color="#fff" /> : (
                 <Text style={styles.confirmText}>
-                  {options.scheduledAt ? "Programmer" : "Commander"} {selected ? `• ${money(Math.max(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0) - (options.promoCode ? options.discount : 0), 0))}` : ""}
+                  {options.scheduledAt ? "Programmer" : "Commander"} {selected ? `• ${money(Math.max(Math.max(selected.price + (options.surchargeEnabled && surcharge ? surcharge.amount : 0) - (options.promoCode ? options.discount : 0), 0) - (options.useWallet && !options.business ? walletBalance : 0), 0))}` : ""}
                 </Text>
               )}
             </Pressable>
@@ -307,6 +331,20 @@ export default function PassengerHome() {
           </BottomSheetScrollView>
         )}
       </BottomSheet>
+
+      <SheetModal visible={!!saveFav} onClose={() => setSaveFav(null)} title="Enregistrer l'adresse" subtitle={saveFav?.address} testID="save-favorite"
+        footer={<Pressable testID="fav-submit" onPress={saveFavorite} style={styles.confirmBtn}><Text style={styles.confirmText}>Enregistrer</Text></Pressable>}>
+        <View style={{ flexDirection: "row", gap: theme.spacing.sm, flexWrap: "wrap" }}>
+          {["Maison", "Travail", "Autre"].map((l) => (
+            <Pressable key={l} testID={`fav-label-${l}`} onPress={() => setFavLabel(l)} style={[styles.locChip, { shadowOpacity: 0, elevation: 0, backgroundColor: favLabel === l ? theme.color.brand : theme.color.surfaceSecondary }]}>
+              <Icon name={l === "Maison" ? "home" : l === "Travail" ? "briefcase" : "star"} size={16} color={favLabel === l ? "#fff" : theme.color.onSurface} />
+              <Text style={[styles.locChipText, favLabel === l && { color: "#fff" }]}>{l}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {favLabel === "Autre" && <TextInput testID="fav-custom" value={favCustom} onChangeText={setFavCustom} placeholder="Nom (ex. Salle de sport)" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.searchWrap, { marginTop: theme.spacing.md, color: theme.color.onSurface, fontSize: 15 }]} />}
+        <Text style={[styles.placeAddr, { marginTop: theme.spacing.md }]}>Vos favoris apparaissent en tête de liste pour commander en deux touches.</Text>
+      </SheetModal>
     </View>
   );
 }

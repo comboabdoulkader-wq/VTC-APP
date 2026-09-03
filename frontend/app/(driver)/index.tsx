@@ -107,6 +107,7 @@ export default function DriverHome() {
       return r;
     } catch { return null; }
   };
+  const decline = async (id: string) => { await act(`/rides/${id}/decline`); setRides((l) => l.filter((r) => r.id !== id)); };
   const accept = async (id: string) => { const r = await act(`/rides/${id}/accept`); if (r) { setActiveRide(r); setEta(null); } };
   const startRide = async () => { if (activeRide) { const r = await act(`/rides/${activeRide.id}/start`); if (r) setActiveRide(r); } };
   const completeRide = async () => { if (activeRide) { await act(`/rides/${activeRide.id}/complete`); setActiveRide(null); setEta(null); loadAvailable(); } };
@@ -250,9 +251,12 @@ export default function DriverHome() {
                   <Text style={styles.reqMeta}>•</Text>
                   <Text style={styles.reqMeta}>{r.duration_min} min</Text>
                 </View>
-                <Pressable testID={`accept-${r.id}`} onPress={() => accept(r.id)} style={styles.acceptBtn}>
-                  <Text style={styles.acceptText}>{r.scheduled_at ? "Réserver cette course" : "Accepter"}</Text>
-                </Pressable>
+                <View style={{ flexDirection: "row", gap: theme.spacing.sm, marginTop: theme.spacing.md }}>
+                  <Pressable testID={`decline-${r.id}`} onPress={() => decline(r.id)} style={styles.declineBtn}><Text style={styles.declineText}>Refuser</Text></Pressable>
+                  <Pressable testID={`accept-${r.id}`} onPress={() => accept(r.id)} style={[styles.acceptBtn, { flex: 2, marginTop: 0 }]}>
+                    <Text style={styles.acceptText}>{r.scheduled_at ? "Réserver cette course" : "Accepter"}</Text>
+                  </Pressable>
+                </View>
               </View>
             ))}
           </ScrollView>
@@ -322,6 +326,8 @@ const styles = StyleSheet.create({
   reqAddr: { fontSize: 15, fontWeight: "600", color: theme.color.onSurface, marginTop: theme.spacing.sm },
   reqAddrSmall: { fontSize: 13, color: theme.color.onSurfaceSecondary, marginTop: 4 },
   reqMeta: { fontSize: 12, color: theme.color.onSurfaceTertiary, fontWeight: "600" },
+  declineBtn: { flex: 1, height: 44, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: theme.color.borderStrong },
+  declineText: { fontWeight: "800", color: theme.color.onSurfaceSecondary, fontSize: 14 },
   acceptBtn: { backgroundColor: theme.color.brand, height: 44, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", marginTop: theme.spacing.md },
   acceptText: { color: "#fff", fontWeight: "800", fontSize: 14 },
 });

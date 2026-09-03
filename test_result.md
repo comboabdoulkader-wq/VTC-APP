@@ -156,3 +156,10 @@ frontend: (driver)/documents.tsx tab, admin console src/components/admin/Drivers
 ## Iteration 8 – Chat, promos, pricing zones, tips (main agent)
 backend: routes/extras.py (chat + promos), price_multiplier on cities applied in estimate/build_ride, promo_code in RideCreateIn, tip checkout kind in payments. Smoke tested manually (all OK).
 frontend: RideChat + ChatButton (passenger ride detail, driver home), PromosManager (profiles), promo input in RideOptions, tip chips in rating box, city multiplier field in CitiesModeration.
+
+## Iteration 10 – Twilio SMS + phone OTP, wallet UI, security hardening (main agent)
+backend: core.py (send_sms w/ Twilio REST, normalize_phone, rate_limit, notify(sms=True)), routes/auth.py (register/login limits, PATCH /auth/me, POST /auth/password, /auth/phone/status|send-code|verify), server.py security headers. Twilio keys NOT configured → send-code returns dev_code. Manually tested with python requests: OTP flow, wrong code 400, sms toggle, password wrong 401, brute force 429.
+frontend: PhoneVerifyCard, AccountSection/AccountSettings, WalletCard in 3 profiles, wallet toggle in RideOptions + payload use_wallet, ride detail wallet rows, (auth)/verify-phone, register referral code + eye toggle, root layout wide-screen frame.
+agent_communication:
+  - agent: "main"
+    message: "Please test: phone OTP flow E2E (send code → dev code displayed → verify → badge), SMS switch, account settings (name edit, password change + login with new pwd then revert), register with phone → verify-phone screen, wallet toggle in booking when balance>0 (credit a wallet via a referral chain or directly in DB), ride creation with use_wallet and detail breakdown."

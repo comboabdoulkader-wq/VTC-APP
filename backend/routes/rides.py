@@ -1,3 +1,4 @@
+import secrets
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -75,6 +76,10 @@ async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = N
         "company_id": user.get("company_id") if data.business else None,
         "arrival_notified": False,
         "reminder_sent": False,
+        "share_token": secrets.token_urlsafe(12),
+        "cancellation_fee": 0,
+        "use_wallet": bool(data.use_wallet),
+        "wallet_amount": 0,
         "created_at": now_utc(),
     }
 
@@ -92,10 +97,28 @@ async def check_budget(user: dict, rides: list):
         raise HTTPException(402, f"Budget professionnel insuffisant : {remaining:.2f} € restants")
 
 
+async def apply_wallet(user: dict, rides: list):
+    """Pay all or part of the rides with the rewards wallet (credit, never cash)."""
+    from routes.referral import credit_wallet
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
+    balance = round((fresh or {}).get("wallet_balance", 0) or 0, 2)
+    for r in rides:
+        if not r.pop("use_wallet", False) or balance <= 0:
+            r.pop("use_wallet", None)
+            continue
+        amt = round(min(balance, r["price"]), 2)
+        balance -= amt
+        r["wallet_amount"] = amt
+        if amt >= r["price"]:
+            r["payment_status"] = "paid"
+        await credit_wallet(user["id"], -amt, "ride_payment", f"Paiement course → {r['dropoff']['address'][:40]}", r["id"])
+
+
 @router.post("", response_model=RideOut)
 async def create_ride(data: RideCreateIn, user=Depends(require_role("passenger"))):
     ride = await build_ride(data, user)
     await check_budget(user, [ride])
+    await apply_wallet(user, [ride])
     await db.rides.insert_one(ride.copy())
     return ride_to_out(ride)
 
@@ -105,6 +128,7 @@ async def create_batch(data: RideBatchIn, user=Depends(require_role("passenger")
     batch_id = new_id()
     rides = [await build_ride(r, user, batch_id) for r in data.rides]
     await check_budget(user, rides)
+    await apply_wallet(user, rides)
     await db.rides.insert_many([r.copy() for r in rides])
     return [ride_to_out(r) for r in rides]
 
@@ -140,8 +164,9 @@ async def available_rides(user=Depends(working_driver)):
         "source": "platform",
         "$or": [{"assigned_driver_id": None}, {"assigned_driver_id": {"$exists": False}}, {"assigned_driver_id": user["id"]}],
     }
+    declined = {d["ride_id"] async for d in db.ride_declines.find({"driver_id": user["id"]}, {"_id": 0, "ride_id": 1})}
     cursor = db.rides.find(q, {"_id": 0}).sort([("surcharge_amount", -1), ("created_at", -1)])
-    return [ride_to_out(r) async for r in cursor]
+    return [ride_to_out(r) async for r in cursor if r["id"] not in declined]
 
 
 @router.get("/{ride_id}", response_model=RideOut)
@@ -180,7 +205,7 @@ async def accept_ride(ride_id: str, user=Depends(working_driver)):
     await db.rides.update_one({"id": ride_id}, {"$set": update})
     r.update(update)
     await notify(r.get("passenger_id"), "accepted", "Chauffeur trouvé",
-                 f"{user['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", ride_id)
+                 f"{user['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", ride_id, sms=True)
     return ride_to_out(r)
 
 
@@ -193,7 +218,7 @@ async def start_ride(ride_id: str, user=Depends(require_role("driver"))):
         raise HTTPException(409, "Statut invalide")
     await db.rides.update_one({"id": ride_id}, {"$set": {"status": "in_progress", "started_at": now_utc()}})
     r["status"] = "in_progress"
-    await notify(r.get("passenger_id"), "started", "Course démarrée", f"Direction {r['dropoff']['address']}", ride_id)
+    await notify(r.get("passenger_id"), "started", "Course démarrée", f"Direction {r['dropoff']['address']}", ride_id, sms=True)
     return ride_to_out(r)
 
 
@@ -213,8 +238,10 @@ async def complete_ride(ride_id: str, user=Depends(require_role("driver"))):
     if r.get("passenger_id"):
         await db.users.update_one({"id": r["passenger_id"]}, {"$inc": {"total_rides": 1}})
     r.update(update)
+    from routes.referral import distribute_referral
+    await distribute_referral(r)
     await notify(r.get("passenger_id"), "completed", "Course terminée",
-                 f"Merci d'avoir voyagé avec {user['full_name']}. Notez votre chauffeur !", ride_id)
+                 f"Merci d'avoir voyagé avec {user['full_name']}. Notez votre chauffeur !", ride_id, sms=True)
     return ride_to_out(r)
 
 
@@ -227,8 +254,20 @@ async def cancel_ride(ride_id: str, user=Depends(current_user)):
         raise HTTPException(403, "Forbidden")
     if r["status"] in ("completed", "cancelled"):
         raise HTTPException(409, "Statut invalide")
-    await db.rides.update_one({"id": ride_id}, {"$set": {"status": "cancelled", "cancelled_at": now_utc()}})
-    r["status"] = "cancelled"
+    if r["status"] == "in_progress" and user["id"] == r.get("passenger_id"):
+        raise HTTPException(409, "Impossible d'annuler une course en cours")
+    update = {"status": "cancelled", "cancelled_at": now_utc(), "cancelled_by": user["role"]}
+    # Passenger cancels after a driver accepted → cancellation fee goes to the driver
+    if user["id"] == r.get("passenger_id") and r["status"] == "accepted" and r.get("driver_id"):
+        from routes.passenger_extras import CANCEL_FEE
+        update["cancellation_fee"] = CANCEL_FEE
+        update["payment_status"] = "unpaid" if r.get("payment_method") == "card" else "paid"
+    await db.rides.update_one({"id": ride_id}, {"$set": update})
+    r.update(update)
+    if r.get("wallet_amount"):
+        from routes.referral import credit_wallet
+        refund = round(r["wallet_amount"] - update.get("cancellation_fee", 0), 2)
+        await credit_wallet(r["passenger_id"], max(refund, 0), "refund", "Remboursement course annulée", ride_id)
     other = r.get("driver_id") if user["id"] == r.get("passenger_id") else r.get("passenger_id")
     await notify(other, "cancelled", "Course annulée", f"Trajet vers {r['dropoff']['address']} annulé", ride_id)
     return ride_to_out(r)

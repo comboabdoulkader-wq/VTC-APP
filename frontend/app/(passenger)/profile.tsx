@@ -10,6 +10,9 @@ import CitiesModeration from "@/src/components/CitiesModeration";
 import DriversAdmin from "@/src/components/admin/DriversAdmin";
 import PromosManager from "@/src/components/PromosManager";
 import CompanyJoinCard from "@/src/components/CompanyJoinCard";
+import WalletCard from "@/src/components/WalletCard";
+import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
+import AccountSection from "@/src/components/AccountSection";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -55,14 +58,11 @@ export default function Profile() {
         </View>
       </View>
 
-      <View style={styles.menuGroup}>
-        <MenuItem icon="account-edit-outline" label="Informations personnelles" />
-        <MenuItem icon="credit-card-outline" label="Moyens de paiement" hint="Espèces" />
-        <MenuItem icon="shield-account-outline" label="Sécurité" />
-        <MenuItem icon="help-circle-outline" label="Aide" />
-      </View>
+      <WalletCard />
+      <PhoneVerifyCard />
+      <AccountSection />
 
-            <CompanyJoinCard />
+      <CompanyJoinCard />
 
       {user.is_moderator && (
         <Pressable testID="open-promos" onPress={() => setShowPromos(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
@@ -97,17 +97,6 @@ export default function Profile() {
   );
 }
 
-function MenuItem({ icon, label, hint }: { icon: string; label: string; hint?: string }) {
-  return (
-    <View style={styles.menuItem} testID={`menu-${icon}`}>
-      <Icon name={icon as any} size={22} color={theme.color.onSurface} />
-      <Text style={styles.menuLabel}>{label}</Text>
-      {hint ? <Text style={styles.menuHint}>{hint}</Text> : null}
-      <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "800", color: theme.color.onSurface, marginBottom: theme.spacing.lg, letterSpacing: -1 },
   card: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.xl, alignItems: "center", marginBottom: theme.spacing.xl },
@@ -121,9 +110,6 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: theme.color.onSurfaceTertiary },
   divider: { width: 1, backgroundColor: theme.color.border, marginHorizontal: theme.spacing.md },
   menuGroup: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, overflow: "hidden", marginBottom: theme.spacing.xl },
-  menuItem: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg, borderBottomWidth: 1, borderBottomColor: theme.color.border },
-  menuLabel: { flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "500" },
-  menuHint: { fontSize: 13, color: theme.color.onSurfaceTertiary, marginRight: theme.spacing.sm },
   logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surfaceSecondary, height: 52, borderRadius: theme.radius.pill },
   logoutText: { color: theme.color.error, fontWeight: "700", fontSize: 15 },
 });

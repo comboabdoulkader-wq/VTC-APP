@@ -26,10 +26,11 @@ export type RideOptionsValue = {
   business: boolean;
   promoCode: string;
   discount: number;
+  useWallet: boolean;
 };
 
 export const DEFAULT_OPTIONS: RideOptionsValue = {
-  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash", business: false, promoCode: "", discount: 0,
+  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash", business: false, promoCode: "", discount: 0, useWallet: false,
 };
 
 type Props = {
@@ -39,15 +40,18 @@ type Props = {
   basePrice: number;
   cardEnabled: boolean;
   budget?: Budget | null;
+  walletBalance?: number;
 };
 
-export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled, budget }: Props) {
+export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled, budget, walletBalance = 0 }: Props) {
   const set = (patch: Partial<RideOptionsValue>) => onChange({ ...value, ...patch });
   const { token } = useAuth();
   const [promoInput, setPromoInput] = React.useState("");
   const [promoError, setPromoError] = React.useState<string | null>(null);
   const subtotal = basePrice + (value.surchargeEnabled && surcharge ? surcharge.amount : 0);
   const total = Math.max(subtotal - (value.promoCode ? value.discount : 0), 0);
+  const walletUsed = value.useWallet && !value.business ? Math.min(walletBalance, total) : 0;
+  const due = Math.max(total - walletUsed, 0);
   const applyPromo = async () => {
     setPromoError(null);
     try {
@@ -158,6 +162,22 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
         </Pressable>
       </View>
 
+      {/* Portefeuille récompenses */}
+      {walletBalance > 0 && !value.business && (
+        <Pressable testID="wallet-toggle" onPress={() => set({ useWallet: !value.useWallet })} style={[styles.card, value.useWallet && styles.cardActive]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: theme.spacing.md }}>
+            <View style={styles.cardIcon}><Icon name="wallet-giftcard" size={22} color={theme.color.onSurface} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Utiliser mon crédit</Text>
+              <Text style={styles.cardMeta}>Solde disponible : {money(walletBalance)}{value.useWallet ? ` · ${money(walletUsed)} utilisés sur cette course` : ""}</Text>
+            </View>
+            <Switch testID="wallet-switch" value={value.useWallet} onValueChange={(v) => set({ useWallet: v })} trackColor={{ true: theme.color.success, false: theme.color.borderStrong }} thumbColor="#fff" />
+          </View>
+          {value.useWallet && due > 0 && <Text style={styles.cardHint}>Le reste ({money(due)}) sera réglé en {value.paymentMethod === "card" ? "carte" : "espèces"}.</Text>}
+          {value.useWallet && due === 0 && <Text style={[styles.cardHint, { color: theme.color.success, fontWeight: "700" }]}>Course entièrement payée avec votre crédit.</Text>}
+        </Pressable>
+      )}
+
       {/* Code promo */}
       <Text style={styles.label}><Icon name="ticket-percent-outline" size={14} /> Code promo</Text>
       {value.promoCode ? (
@@ -198,6 +218,12 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
           <Text style={styles.totalFinalLabel}>Total {value.scheduledAt ? "· programmée" : ""}{value.business ? " · pro" : ""}</Text>
           <Text style={styles.totalFinalVal}>{money(total)}</Text>
         </View>
+        {walletUsed > 0 && (
+          <>
+            <View style={styles.totalRow} testID="wallet-breakdown"><Text style={[styles.totalLabel, { color: theme.color.success }]}>Portefeuille récompenses</Text><Text style={[styles.totalVal, { color: theme.color.success }]}>−{money(walletUsed)}</Text></View>
+            <View style={styles.totalRow}><Text style={[styles.totalLabel, { fontWeight: "700", color: theme.color.onSurface }]}>Reste à payer ({value.paymentMethod === "card" ? "carte" : "espèces"})</Text><Text style={[styles.totalVal, { fontWeight: "800" }]}>{money(due)}</Text></View>
+          </>
+        )}
       </View>
     </View>
   );

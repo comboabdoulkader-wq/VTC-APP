@@ -47,7 +47,10 @@ async def create_checkout(ride_id: str, body: CheckoutIn, user=Depends(require_r
     else:
         if ride.get("payment_status") == "paid":
             raise HTTPException(409, "Course déjà payée")
-        amount = int(round(ride["price"] * 100))
+        due = round(ride["price"] - ride.get("wallet_amount", 0), 2)
+        if due <= 0:
+            raise HTTPException(409, "Course déjà réglée par le portefeuille")
+        amount = int(round(due * 100))
         label = f"Course VTC → {ride['dropoff']['address'][:60]}"
     return_url = allowed_return_url(body.return_url)
     sep = "&" if "?" in return_url else "?"

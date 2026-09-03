@@ -15,6 +15,7 @@ export default function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -61,15 +62,23 @@ export default function Login() {
 
         <View style={styles.field}>
           <Text style={styles.label}>Mot de passe</Text>
-          <TextInput
-            testID="password-input"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="••••••••"
-            placeholderTextColor={theme.color.onSurfaceTertiary}
-            style={styles.input}
-          />
+          <View style={styles.pwdRow}>
+            <TextInput
+              testID="password-input"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPwd}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              placeholderTextColor={theme.color.onSurfaceTertiary}
+              style={[styles.input, { flex: 1 }]}
+              onSubmitEditing={submit}
+              returnKeyType="go"
+            />
+            <Pressable testID="toggle-password" onPress={() => setShowPwd((v) => !v)} style={styles.eye} hitSlop={8} accessibilityLabel={showPwd ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+              <Icon name={showPwd ? "eye-off-outline" : "eye-outline"} size={22} color={theme.color.onSurfaceSecondary} />
+            </Pressable>
+          </View>
         </View>
 
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
@@ -99,6 +108,8 @@ const styles = StyleSheet.create({
   field: { marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.onSurfaceSecondary, marginBottom: theme.spacing.sm },
   input: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 56, fontSize: 16, color: theme.color.onSurface },
+  pwdRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  eye: { width: 48, height: 56, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
   error: { color: theme.color.error, fontSize: 14, marginBottom: theme.spacing.md },
   primary: { backgroundColor: theme.color.brand, height: 56, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", marginTop: theme.spacing.md, marginBottom: theme.spacing.lg },
   primaryText: { color: theme.color.onBrand, fontWeight: "700", fontSize: 16 },
