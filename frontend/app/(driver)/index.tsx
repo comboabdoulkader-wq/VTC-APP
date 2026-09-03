@@ -118,8 +118,12 @@ export default function DriverHome() {
   const imHere = async () => {
     if (!activeRide) return;
     await act("/driver/location", { lat: activeRide.pickup.lat, lng: activeRide.pickup.lng });
+    const r = await act(`/rides/${activeRide.id}/arrived`);
+    if (r) setActiveRide(r);
     setEta(0);
   };
+  const stopArrive = async (i: number) => { if (activeRide) { const r = await act(`/rides/${activeRide.id}/stops/${i}/arrive`); if (r) setActiveRide(r); } };
+  const stopDepart = async (i: number) => { if (activeRide) { const r = await act(`/rides/${activeRide.id}/stops/${i}/depart`); if (r) setActiveRide(r); } };
 
   const markers: MapMarker[] = [];
   if (loc.coords) markers.push({ id: "me", type: "driver", coordinate: { latitude: loc.coords.lat, longitude: loc.coords.lng } });
@@ -224,6 +228,26 @@ export default function DriverHome() {
                 <Pressable testID="start-ride" onPress={startRide} style={styles.primary}><Text style={styles.primaryText}>Client à bord – démarrer</Text></Pressable>
               </>
             )}
+            {activeRide.status === "accepted" && activeRide.arrived_at && (
+              <Text style={styles.waitNote} testID="driver-wait-note">⏱️ Attente : 3 min offertes puis 1 €/min{activeRide.breakdown?.waiting > 0 ? ` · déjà +${activeRide.breakdown.waiting.toFixed(2)} €` : ""}</Text>
+            )}
+            {activeRide.status === "in_progress" && (activeRide.stops || []).length > 0 && (
+              <View style={styles.stopsBox}>
+                <Text style={styles.stopsTitle}>Arrêts (2 min offertes puis 1 €/min)</Text>
+                {(activeRide.stops || []).map((s: any, i: number) => {
+                  const w = activeRide.stop_waits?.[i] || {};
+                  const done = !!w.departed_at; const active = !!w.active;
+                  return (
+                    <View key={i} style={styles.stopItem} testID={`driver-stop-${i}`}>
+                      <Text style={styles.stopAddr} numberOfLines={1}>{i + 1}. {s.address}</Text>
+                      {done ? <Text style={styles.stopDone}>Reparti · +{(w.fee || 0).toFixed(2)} €</Text>
+                        : active ? <Pressable testID={`driver-stop-depart-${i}`} onPress={() => stopDepart(i)} style={styles.stopBtn}><Text style={styles.stopBtnText}>Repartir (+{(w.fee || 0).toFixed(2)} €)</Text></Pressable>
+                        : <Pressable testID={`driver-stop-arrive-${i}`} onPress={() => stopArrive(i)} style={styles.stopBtn}><Text style={styles.stopBtnText}>Arrivé à l'arrêt</Text></Pressable>}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
             {activeRide.status === "in_progress" && (
               <Pressable testID="complete-ride" onPress={completeRide} style={[styles.primary, { backgroundColor: theme.color.success }]}><Text style={styles.primaryText}>Terminer la course</Text></Pressable>
             )}
@@ -323,6 +347,14 @@ const styles = StyleSheet.create({
   primaryText: { color: "#fff", fontWeight: "800", fontSize: 16 },
   secondary: { flexDirection: "row", gap: theme.spacing.sm, height: 48, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: theme.color.borderStrong },
   secondaryText: { color: theme.color.onSurface, fontWeight: "700", fontSize: 14 },
+  waitNote: { fontSize: 12, color: theme.color.onSurfaceSecondary, fontWeight: "600", marginTop: theme.spacing.sm, textAlign: "center" },
+  stopsBox: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.md, marginTop: theme.spacing.md, gap: theme.spacing.sm },
+  stopsTitle: { fontSize: 12, fontWeight: "800", color: theme.color.onSurfaceSecondary },
+  stopItem: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  stopAddr: { flex: 1, fontSize: 13, color: theme.color.onSurface, fontWeight: "600" },
+  stopDone: { fontSize: 12, color: theme.color.success, fontWeight: "700" },
+  stopBtn: { backgroundColor: theme.color.brand, borderRadius: theme.radius.pill, paddingHorizontal: theme.spacing.md, height: 34, justifyContent: "center" },
+  stopBtnText: { color: theme.color.onBrand, fontSize: 12, fontWeight: "800" },
   request: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.spacing.lg, marginBottom: theme.spacing.md, borderWidth: 2, borderColor: "transparent" },
   requestBonus: { borderColor: theme.color.success },
   reqType: { fontSize: 11, fontWeight: "800", color: theme.color.onSurfaceSecondary, letterSpacing: 0.5 },

@@ -147,3 +147,10 @@ See /app/memory/test_credentials.md
 - Alerte Nouveau Filleul: auth.register links sponsor_id from partner_leads AND notifies the partner ("Nouveau filleul").
 - Notes Clients: db.partner_guests upserted on each partner booking + GET/POST/DELETE /company/guests; PartnerBookingForm quick-pick "Clients enregistrés" (guest-chip-{id} prefills, guest-del-{id} removes).
 - Added tabBarButtonTestID to (company)/(driver)/(passenger) tab layouts (tab-company, tab-clients, tab-profile, …) for testability.
+
+## Iteration 22 – PHASE 1 ride/booking/pricing overhaul (DONE, backend 8/8 + frontend verified)
+- Stops/waypoints: EstimateIn/RideCreateIn accept stops[] (≤8); core.route_metrics sums legs; estimate/build_ride/modify use it. Booking home 'Ajouter un arrêt' (stop-picker) + ride edit + RideEditSheet.
+- Modify ride: PATCH /rides/{id} (passenger only, until completed) edits pickup/dropoff/stops/vehicle/scheduled_at/pax/bags, recomputes price, notifies driver. UI 'Modifier la course' → RideEditSheet with live price.
+- Waiting fees: core.wait_fee — departure 3 min free then 1€/min; each stop 2 min free then 1€/min. Driver /arrived, /stops/{i}/arrive|depart; /start freezes departure fee; /complete folds waiting+toll into final price/due. Live counters + breakdown in ride detail; driver stop buttons + wait note.
+- Payment: card is default (cash kept secondary). Language: first-launch gate on welcome (AsyncStorage lang_onboarded) + auto-detect + settings; all screens use i18n (6 langs).
+- PHASE 2 (pending, needs native build): saved cards, Apple/Google Pay, off-session auto-charge, prepay — via Stripe RN SDK + integration_expert.

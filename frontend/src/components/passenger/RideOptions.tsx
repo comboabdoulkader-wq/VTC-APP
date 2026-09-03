@@ -30,7 +30,7 @@ export type RideOptionsValue = {
 };
 
 export const DEFAULT_OPTIONS: RideOptionsValue = {
-  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "cash", business: false, promoCode: "", discount: 0, useWallet: false,
+  surchargeEnabled: false, scheduledAt: null, forOther: false, passengerLabel: "", notes: "", paymentMethod: "card", business: false, promoCode: "", discount: 0, useWallet: false,
 };
 
 type Props = {

@@ -1,0 +1,35 @@
+{
+  "summary": "Phase 1 (stops, ride modify, waiting fees, breakdown, language gate, card-default, booking stops UI, modify sheet) fully tested. All 8 backend tests PASS. Frontend flows all validated: language gate shows on first load and hides after continue, passenger login → destination pick → 'Ajouter un arrêt' opens stop-picker, stop-place-* adds home-stop-0 and price updates (Berline 11.54 € → after distant stop 95.04 €). Payment default is 'Carte' (active dark chip rgb(20,20,20); Espèces inactive rgb(245,245,245)). Modify-ride opens RideEditSheet with all expected testIDs (edit-add-stop, edit-dropoff, edit-vehicle-*, ride-edit-save). Vehicle change updates price live (Berline 13.20 € → Van 19.60 €). Deprecated packages: none.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login (/(auth)/login.tsx)", "issues": ["UI is in English (Welcome back / Sign in / Sign in to continue / Create an account) even when language gate set 'fr'. Should be 'Bienvenue / Se connecter'. i18n miss on login screen."]},
+      {"screen": "Passenger home /(passenger)/index.tsx", "issues": ["Mixed language: 'Trip details / Adults / Children / Luggage / Choose your vehicle' are English while 'Ajouter un arrêt / Trajet privé de porte à porte' are French. Localization keys likely missing for these labels."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration22_phase1.py",
+    "/app/test_reports/pytest/iteration22.xml"
+  ],
+  "action_items": [
+    "Fix i18n on login screen and passenger home 'Trip details / Adults / Children / Luggage / Choose your vehicle / Now / Today / Tomorrow' labels to use current language (fr default). English strings leak through when lang_onboarded='fr'.",
+    "OPTIONAL polish: after tapping 'edit-add-stop', consider auto-focusing the new stop's search input or directly opening a picker (currently adds an empty stop row that then needs a separate tap to edit); save is correctly disabled with 'Renseignez l'adresse de chaque arrêt' — good UX guard."
+  ],
+  "critical_code_review_comments": [
+    "modify_ride() correctly returns 404 for other passengers and 409 for completed/cancelled rides (verified). Idempotent recompute of base_price/distance/duration on PATCH works.",
+    "wait_fee() correctly free_min then ceil(billable)*rate (unit-tested).",
+    "Completion math: waiting_fee = departure_fee + sum(stop_waits.fee); final price = price + waiting_fee + toll; due_amount recomputed (verified E2E with backdated timestamps).",
+    "RideOut breakdown.total for non-completed rides = price + live_wait + toll; for completed rides = price (already inclusive). Correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration22_phase1.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created 3 test rides for passager@test.com during flow validation (all in 'requested' state).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 backend contract: POST /rides/estimate accepts stops[]; PATCH /rides/{id} passenger-only, allowed until completed; driver flow uses /arrived → /start (bills departure wait) and /stops/{i}/arrive → /depart (bills stop wait) → /complete (finalizes waiting_fee & final price). Waiting-fee rules: 3 min free at pickup then 1€/min; 2 min free per stop then 1€/min; billed minutes are math.ceil'd. Backdating via mongo used for time-sensitive tests. Language gate: localStorage key 'lang_onboarded' on web. Login screen and passenger home still have hardcoded English strings that ignore selected language — minor i18n issue reported for main agent."
+}

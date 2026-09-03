@@ -87,6 +87,28 @@ def base_fare(vehicle_type: str, dist: float, duration: int) -> float:
     return round(cfg["base"] + dist * cfg["per_km"] + duration * cfg["per_min"], 2)
 
 
+# ---- Stops (waypoints) & waiting-time rules ----
+WAIT_FREE_DEPARTURE_MIN = 3      # first 3 minutes of departure wait are free
+WAIT_STOP_FREE_MIN = 2           # first 2 minutes at each stop are free
+WAIT_RATE_PER_MIN = 1.0          # €/min beyond the free allowance (TTC)
+
+
+def route_metrics(points: list[dict]) -> tuple[float, int]:
+    """Total distance (km) and duration (min) across ordered points: pickup, stops…, dropoff."""
+    pts = [p for p in points if p and p.get("lat") is not None and p.get("lng") is not None]
+    if len(pts) < 2:
+        return 0.5, 3
+    dist = sum(haversine_km(a["lat"], a["lng"], b["lat"], b["lng"]) for a, b in zip(pts, pts[1:]))
+    dist = max(dist, 0.5)
+    return round(dist, 2), max(int(dist / AVG_SPEED_KMH * 60), 3)
+
+
+def wait_fee(free_min: float, minutes: float) -> float:
+    """Billable waiting fee: free_min are free, then WAIT_RATE_PER_MIN per started minute."""
+    billable = max(0.0, float(minutes) - float(free_min))
+    return round(math.ceil(billable) * WAIT_RATE_PER_MIN, 2) if billable > 0 else 0.0
+
+
 async def seed_cities():
     if await db.cities.count_documents({}) == 0:
         await db.cities.insert_many([

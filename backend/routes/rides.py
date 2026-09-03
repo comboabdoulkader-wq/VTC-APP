@@ -5,13 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core import (
     VEHICLE_PRICING, base_fare, current_user, db, new_id, notify, now_utc,
-    require_role, send_tracking_link, surcharge_for, trip_metrics, working_driver,
+    require_role, route_metrics, send_tracking_link, surcharge_for, trip_metrics, wait_fee,
+    working_driver, WAIT_FREE_DEPARTURE_MIN, WAIT_STOP_FREE_MIN, WAIT_RATE_PER_MIN,
 )
 from push import push_safe
 from catalog import CANCELLATION_POLICY, SERVICES, VEHICLES, booking_ref, fits, hourly_price, match_fixed_route
 from flights import lookup_flight, normalize_flight
 from emailer import send_ride_receipt
-from models import EstimateIn, EstimateOut, RateIn, RideBatchIn, RideCreateIn, RideOut, VehicleEstimate
+from models import EstimateIn, EstimateOut, RateIn, RideBatchIn, RideCreateIn, RideModifyIn, RideOut, VehicleEstimate
 from serializers import ride_to_out
 
 router = APIRouter(prefix="/rides", tags=["rides"])
@@ -22,7 +23,8 @@ ACTIVE = ["requested", "accepted", "in_progress"]
 @router.post("/estimate", response_model=EstimateOut)
 async def estimate(data: EstimateIn):
     pickup, dropoff = data.pickup.model_dump(), data.dropoff.model_dump()
-    dist, duration = trip_metrics(pickup, dropoff)
+    stops = [s.model_dump() for s in data.stops]
+    dist, duration = route_metrics([pickup, *stops, dropoff]) if stops else trip_metrics(pickup, dropoff)
     sur = await surcharge_for(pickup)
     mult = sur["price_multiplier"]
     svc = SERVICES[data.service_type]
@@ -50,7 +52,8 @@ async def estimate(data: EstimateIn):
 
 async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = None) -> dict:
     pickup, dropoff = data.pickup.model_dump(), data.dropoff.model_dump()
-    dist, duration = trip_metrics(pickup, dropoff)
+    stops = [s.model_dump() for s in getattr(data, "stops", [])]
+    dist, duration = route_metrics([pickup, *stops, dropoff]) if stops else trip_metrics(pickup, dropoff)
     city = await surcharge_for(pickup)
     svc = SERVICES[data.service_type]
     hours = max(data.hours, svc["min_hours"]) if svc["pricing"] == "hourly" else 0
@@ -94,6 +97,7 @@ async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = N
         "driver_id": None,
         "pickup": pickup,
         "dropoff": dropoff,
+        "stops": stops,
         "vehicle_type": data.vehicle_type,
         "base_price": base,
         "surcharge_enabled": bool(sur),
@@ -128,6 +132,10 @@ async def build_ride(data: RideCreateIn, user: dict, batch_id: Optional[str] = N
         "fixed_price": bool(fixed and data.vehicle_type in fixed["prices"]),
         "fixed_route_name": fixed["name"] if fixed and data.vehicle_type in fixed["prices"] else None,
         "flight": flight,
+        "arrived_at": None,
+        "waiting_departure_fee": 0.0,
+        "stop_waits": [{"arrived_at": None, "departed_at": None, "fee": 0.0} for _ in stops],
+        "toll_amount": 0.0,
         "created_at": now_utc(),
     }
 
@@ -277,6 +285,121 @@ async def accept_ride(ride_id: str, user=Depends(working_driver)):
     return ride_to_out(r)
 
 
+@router.post("/{ride_id}/arrived", response_model=RideOut)
+async def driver_arrived(ride_id: str, user=Depends(require_role("driver"))):
+    """Driver reached the pickup: start the departure waiting timer (3 min free, then 1 €/min)."""
+    r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
+    if not r or r.get("driver_id") != user["id"]:
+        raise HTTPException(404, "Course introuvable")
+    if r["status"] != "accepted":
+        raise HTTPException(409, "Statut invalide")
+    if not r.get("arrived_at"):
+        await db.rides.update_one({"id": ride_id}, {"$set": {"arrived_at": now_utc(), "arrival_notified": True}})
+        r["arrived_at"] = now_utc()
+        await notify(r.get("passenger_id"), "arriving", "Votre chauffeur est arrivé",
+                     f"{WAIT_FREE_DEPARTURE_MIN} min d'attente offertes, puis {WAIT_RATE_PER_MIN:.0f} €/min", ride_id, sms=True)
+    return ride_to_out(r)
+
+
+@router.post("/{ride_id}/stops/{index}/arrive", response_model=RideOut)
+async def stop_arrive(ride_id: str, index: int, user=Depends(require_role("driver"))):
+    r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
+    if not r or r.get("driver_id") != user["id"]:
+        raise HTTPException(404, "Course introuvable")
+    waits = r.get("stop_waits") or []
+    if index < 0 or index >= len(waits):
+        raise HTTPException(404, "Arrêt introuvable")
+    if not waits[index].get("arrived_at"):
+        waits[index]["arrived_at"] = now_utc()
+        await db.rides.update_one({"id": ride_id}, {"$set": {"stop_waits": waits}})
+        r["stop_waits"] = waits
+        await notify(r.get("passenger_id"), "arriving", "Arrivé à l'arrêt",
+                     f"{WAIT_STOP_FREE_MIN} min offertes, puis {WAIT_RATE_PER_MIN:.0f} €/min", ride_id)
+    return ride_to_out(r)
+
+
+@router.post("/{ride_id}/stops/{index}/depart", response_model=RideOut)
+async def stop_depart(ride_id: str, index: int, user=Depends(require_role("driver"))):
+    r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
+    if not r or r.get("driver_id") != user["id"]:
+        raise HTTPException(404, "Course introuvable")
+    waits = r.get("stop_waits") or []
+    if index < 0 or index >= len(waits):
+        raise HTTPException(404, "Arrêt introuvable")
+    w = waits[index]
+    if w.get("arrived_at") and not w.get("departed_at"):
+        now = now_utc()
+        arr = w["arrived_at"]
+        if getattr(arr, "tzinfo", None) is None:
+            from datetime import timezone as _tz
+            arr = arr.replace(tzinfo=_tz.utc)
+        w["departed_at"] = now
+        w["fee"] = wait_fee(WAIT_STOP_FREE_MIN, (now - arr).total_seconds() / 60)
+        await db.rides.update_one({"id": ride_id}, {"$set": {"stop_waits": waits}})
+        r["stop_waits"] = waits
+    return ride_to_out(r)
+
+
+@router.patch("/{ride_id}", response_model=RideOut)
+async def modify_ride(ride_id: str, data: RideModifyIn, user=Depends(require_role("passenger"))):
+    """Passenger edits a ride until it is completed/cancelled. Price is recomputed and returned for review."""
+    r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
+    if not r or r.get("passenger_id") != user["id"]:
+        raise HTTPException(404, "Course introuvable")
+    if r["status"] in ("completed", "cancelled"):
+        raise HTTPException(409, "Course terminée : modification impossible")
+    from catalog import SERVICES, VEHICLES, fits, hourly_price, match_fixed_route
+    upd: dict = {}
+    if data.pickup is not None:
+        upd["pickup"] = data.pickup.model_dump()
+    if data.dropoff is not None:
+        upd["dropoff"] = data.dropoff.model_dump()
+    if data.stops is not None:
+        upd["stops"] = [s.model_dump() for s in data.stops]
+        if len(data.stops) != len(r.get("stops") or []):
+            upd["stop_waits"] = [{"arrived_at": None, "departed_at": None, "fee": 0.0} for _ in data.stops]
+    if data.vehicle_type is not None:
+        upd["vehicle_type"] = data.vehicle_type
+    if data.scheduled_at is not None:
+        upd["scheduled_at"] = data.scheduled_at
+    for f in ("passengers", "children", "child_seats", "luggage"):
+        v = getattr(data, f)
+        if v is not None:
+            upd[f] = v
+    merged = {**r, **upd}
+    pickup, dropoff = merged["pickup"], merged["dropoff"]
+    stops = merged.get("stops") or []
+    pax = merged.get("passengers", 1) + merged.get("children", 0)
+    if not fits(merged["vehicle_type"], pax, merged.get("luggage", 0)):
+        v = VEHICLES[merged["vehicle_type"]]
+        raise HTTPException(422, f"{v['label']} : {v['passengers']} passagers et {v['luggage']} bagages maximum.")
+    dist, duration = route_metrics([pickup, *stops, dropoff]) if stops else trip_metrics(pickup, dropoff)
+    svc = SERVICES.get(merged.get("service_type", "private"), SERVICES["private"])
+    hours = merged.get("hours", 0)
+    fixed = await match_fixed_route(pickup, dropoff) if not hours else None
+    mult = merged.get("price_multiplier", 1.0)
+    if hours and svc["pricing"] == "hourly":
+        base = hourly_price(merged["vehicle_type"], hours)
+    elif fixed and merged["vehicle_type"] in fixed["prices"]:
+        base = round(float(fixed["prices"][merged["vehicle_type"]]), 2)
+    else:
+        base = round(base_fare(merged["vehicle_type"], dist, duration) * mult, 2)
+    sur_amount = r.get("surcharge_amount", 0) if r.get("surcharge_enabled") else 0.0
+    discount = r.get("discount_amount", 0)
+    new_price = round(max(base + sur_amount - discount, 0), 2)
+    upd.update({
+        "base_price": base, "distance_km": dist, "duration_min": duration,
+        "fixed_price": bool(fixed and merged["vehicle_type"] in fixed["prices"]),
+        "fixed_route_name": fixed["name"] if fixed and merged["vehicle_type"] in fixed["prices"] else None,
+        "price": new_price, "due_amount": round(new_price - r.get("wallet_amount", 0), 2), "modified_at": now_utc(),
+    })
+    await db.rides.update_one({"id": ride_id}, {"$set": upd})
+    r.update(upd)
+    if r.get("driver_id"):
+        await notify(r["driver_id"], "modified", "Course modifiée", "Le client a modifié la course. Vérifiez le nouvel itinéraire.", ride_id)
+    return ride_to_out(r)
+
+
 @router.post("/{ride_id}/start", response_model=RideOut)
 async def start_ride(ride_id: str, user=Depends(require_role("driver"))):
     r = await db.rides.find_one({"id": ride_id}, {"_id": 0})
@@ -284,8 +407,16 @@ async def start_ride(ride_id: str, user=Depends(require_role("driver"))):
         raise HTTPException(404, "Course introuvable")
     if r["status"] != "accepted":
         raise HTTPException(409, "Statut invalide")
-    await db.rides.update_one({"id": ride_id}, {"$set": {"status": "in_progress", "started_at": now_utc()}})
-    r["status"] = "in_progress"
+    now = now_utc()
+    dep_fee = 0.0
+    if r.get("arrived_at"):
+        arr = r["arrived_at"]
+        if getattr(arr, "tzinfo", None) is None:
+            from datetime import timezone as _tz
+            arr = arr.replace(tzinfo=_tz.utc)
+        dep_fee = wait_fee(WAIT_FREE_DEPARTURE_MIN, (now - arr).total_seconds() / 60)
+    await db.rides.update_one({"id": ride_id}, {"$set": {"status": "in_progress", "started_at": now, "waiting_departure_fee": dep_fee}})
+    r["status"] = "in_progress"; r["waiting_departure_fee"] = dep_fee
     await notify(r.get("passenger_id"), "started", "Course démarrée", f"Direction {r['dropoff']['address']}", ride_id, sms=True)
     return ride_to_out(r)
 
@@ -299,6 +430,23 @@ async def complete_ride(ride_id: str, user=Depends(require_role("driver"))):
         raise HTTPException(409, "Statut invalide")
     now = now_utc()
     update = {"status": "completed", "completed_at": now}
+    # Finalise waiting fees: any open stop timer is closed now.
+    waits = r.get("stop_waits") or []
+    for w in waits:
+        if w.get("arrived_at") and not w.get("departed_at"):
+            arr = w["arrived_at"]
+            if getattr(arr, "tzinfo", None) is None:
+                from datetime import timezone as _tz
+                arr = arr.replace(tzinfo=_tz.utc)
+            w["departed_at"] = now
+            w["fee"] = wait_fee(WAIT_STOP_FREE_MIN, (now - arr).total_seconds() / 60)
+    waiting_fee = round((r.get("waiting_departure_fee") or 0) + sum(w.get("fee", 0) for w in waits), 2)
+    toll = round(r.get("toll_amount") or 0, 2)
+    final_price = round(r.get("price", 0) + waiting_fee + toll, 2)
+    update["stop_waits"] = waits
+    update["waiting_fee"] = waiting_fee
+    update["price"] = final_price
+    update["due_amount"] = round(final_price - r.get("wallet_amount", 0), 2)
     if r.get("payment_method") == "cash":
         update["payment_status"] = "paid"
     await db.rides.update_one({"id": ride_id}, {"$set": update})

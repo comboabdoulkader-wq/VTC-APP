@@ -1,6 +1,13 @@
 """Dict -> API model serializers."""
+from datetime import timezone
+
 from catalog import SERVICE_LABELS, SERVICES
+from core import WAIT_FREE_DEPARTURE_MIN, WAIT_STOP_FREE_MIN, now_utc, wait_fee
 from models import DriverLocation, LocationIn, RideOut, UserOut
+
+
+def _aware(dt):
+    return dt.replace(tzinfo=timezone.utc) if dt and getattr(dt, "tzinfo", None) is None else dt
 
 
 def user_to_out(u: dict, **extra) -> UserOut:
@@ -39,6 +46,32 @@ def user_to_out(u: dict, **extra) -> UserOut:
 
 def ride_to_out(r: dict) -> RideOut:
     loc = r.get("driver_location")
+    now = now_utc()
+    dep_fee = round(r.get("waiting_departure_fee") or 0, 2)
+    dep_min = 0.0
+    waiting_active = False
+    if r.get("arrived_at") and r.get("status") == "accepted":
+        dep_min = round((now - _aware(r["arrived_at"])).total_seconds() / 60, 1)
+        dep_fee = wait_fee(WAIT_FREE_DEPARTURE_MIN, dep_min)
+        waiting_active = True
+    stop_waits = []
+    for w in (r.get("stop_waits") or []):
+        fee = round(w.get("fee") or 0, 2)
+        active = bool(w.get("arrived_at") and not w.get("departed_at"))
+        if active:
+            mins = round((now - _aware(w["arrived_at"])).total_seconds() / 60, 1)
+            fee = wait_fee(WAIT_STOP_FREE_MIN, mins)
+            waiting_active = True
+        stop_waits.append({"arrived_at": w.get("arrived_at"), "departed_at": w.get("departed_at"), "fee": fee, "active": active})
+    live_wait = round(dep_fee + sum(s["fee"] for s in stop_waits), 2)
+    toll = round(r.get("toll_amount") or 0, 2)
+    breakdown = {
+        "base": round(r.get("base_price", r.get("price", 0)), 2),
+        "surcharge": round(r.get("surcharge_amount", 0), 2),
+        "discount": round(r.get("discount_amount", 0), 2),
+        "waiting": live_wait, "toll": toll,
+        "total": round(r.get("price", 0) + (0 if r.get("status") == "completed" else live_wait + toll), 2),
+    }
     return RideOut(
         id=r["id"],
         source=r.get("source", "platform"),
@@ -58,6 +91,7 @@ def ride_to_out(r: dict) -> RideOut:
         driver_eta_min=r.get("driver_eta_min"),
         pickup=LocationIn(**r["pickup"]),
         dropoff=LocationIn(**r["dropoff"]),
+        stops=[LocationIn(**s) for s in (r.get("stops") or [])],
         vehicle_type=r["vehicle_type"],
         base_price=r.get("base_price", r["price"]),
         surcharge_enabled=r.get("surcharge_enabled", False),
@@ -106,4 +140,12 @@ def ride_to_out(r: dict) -> RideOut:
         partner_discount_amount=r.get("partner_discount_amount", 0),
         guest_name=r.get("guest_name"),
         room=r.get("room"),
+        arrived_at=r.get("arrived_at"),
+        waiting_departure_min=dep_min,
+        waiting_departure_fee=dep_fee,
+        waiting_active=waiting_active,
+        stop_waits=stop_waits,
+        waiting_fee=round(r.get("waiting_fee") or 0, 2),
+        toll_amount=toll,
+        breakdown=breakdown,
     )

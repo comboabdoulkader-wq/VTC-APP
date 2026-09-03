@@ -1,15 +1,52 @@
-import { View, Text, StyleSheet, Pressable, ImageBackground } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Pressable, ImageBackground, ScrollView, ActivityIndicator } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { theme } from "@/src/theme";
-import { useI18n } from "@/src/i18n";
+import { useI18n, LANGS, Lang } from "@/src/i18n";
+
+const LANG_FLAG = "lang_onboarded";
 
 export default function Welcome() {
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [gate, setGate] = useState<boolean | null>(null);
+
+  useEffect(() => { AsyncStorage.getItem(LANG_FLAG).then((v) => setGate(!v)).catch(() => setGate(false)); }, []);
+  const confirmLang = async () => { await AsyncStorage.setItem(LANG_FLAG, "1"); setGate(false); };
+
+  if (gate === null) return <View style={[styles.root, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color="#fff" /></View>;
+
+  if (gate) {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.color.surface }]} testID="language-gate">
+        <View style={{ flex: 1, paddingTop: insets.top + theme.spacing.xxl, paddingBottom: insets.bottom + theme.spacing.xl, paddingHorizontal: theme.spacing.xl, justifyContent: "space-between" }}>
+          <View>
+            <Text style={styles.brand}>RideGo</Text>
+            <Text style={styles.gateTitle}>Choisissez votre langue</Text>
+            <Text style={styles.gateSub}>Choose your language · Elige tu idioma · اختر لغتك · 选择语言</Text>
+            <ScrollView style={{ marginTop: theme.spacing.xl }} contentContainerStyle={{ gap: theme.spacing.sm }}>
+              {LANGS.map((l) => {
+                const active = l.code === lang;
+                return (
+                  <Pressable key={l.code} testID={`gate-lang-${l.code}`} onPress={() => setLang(l.code as Lang)} style={[styles.langRow, active && styles.langRowActive]}>
+                    <Text style={{ fontSize: 22 }}>{l.flag}</Text>
+                    <Text style={[styles.langLabel, active && { color: theme.color.onBrand }]}>{l.label}</Text>
+                    {active ? <Text style={[styles.langLabel, { color: theme.color.onBrand }]}>✓</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <Pressable testID="gate-continue" onPress={confirmLang} style={styles.primaryBtn}><Text style={styles.primaryText}>{t("login") === "Connexion" ? "Continuer" : "Continue"}</Text></Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root} testID="welcome-screen">
@@ -53,6 +90,11 @@ export default function Welcome() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
+  gateTitle: { color: theme.color.onSurface, fontSize: 26, fontWeight: "800", marginTop: theme.spacing.xl },
+  gateSub: { color: theme.color.onSurfaceSecondary, fontSize: 13, marginTop: theme.spacing.sm },
+  langRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 56, borderWidth: 1.5, borderColor: theme.color.border },
+  langRowActive: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
+  langLabel: { flex: 1, fontSize: 16, fontWeight: "700", color: theme.color.onSurface },
   content: { flex: 1, justifyContent: "space-between", paddingHorizontal: theme.spacing.xl },
   brand: { color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
   headline: { color: "#fff", fontSize: 40, fontWeight: "800", lineHeight: 46, letterSpacing: -1 },

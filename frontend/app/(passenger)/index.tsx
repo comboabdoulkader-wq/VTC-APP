@@ -21,12 +21,13 @@ import TripDetails, { DEFAULT_TRIP, TripDetailsValue } from "@/src/components/pa
 import VehicleCard, { VehicleOption } from "@/src/components/passenger/VehicleCard";
 
 type Estimate = VehicleOption;
-type CartItem = { key: string; pickup: Place; dropoff: Place; vehicle: Estimate; options: RideOptionsValue; surcharge: Surcharge; service: string; trip: TripDetailsValue };
+type CartItem = { key: string; pickup: Place; dropoff: Place; stops: Place[]; vehicle: Estimate; options: RideOptionsValue; surcharge: Surcharge; service: string; trip: TripDetailsValue };
 const SheetInput: any = Platform.OS === "web" ? TextInput : BottomSheetTextInput;
 
 const toPayload = (it: CartItem) => ({
   pickup: { lat: it.pickup.lat, lng: it.pickup.lng, address: it.pickup.address },
   dropoff: { lat: it.dropoff.lat, lng: it.dropoff.lng, address: it.dropoff.address },
+  stops: (it.stops || []).map((s) => ({ lat: s.lat, lng: s.lng, address: s.address })),
   vehicle_type: it.vehicle.vehicle_type,
   surcharge_enabled: it.options.surchargeEnabled,
   scheduled_at: it.options.scheduledAt ? it.options.scheduledAt.toISOString() : null,
@@ -58,6 +59,9 @@ export default function PassengerHome() {
 
   const [pickup, setPickup] = useState<Place>(DEFAULT_PICKUP);
   const [dropoff, setDropoff] = useState<Place | null>(null);
+  const [stops, setStops] = useState<Place[]>([]);
+  const [stopPickerOpen, setStopPickerOpen] = useState(false);
+  const [stopQuery, setStopQuery] = useState("");
   const [searchMode, setSearchMode] = useState<"pickup" | "dropoff">("dropoff");
   const [query, setQuery] = useState("");
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -97,6 +101,7 @@ export default function PassengerHome() {
   };
   const removeFavorite = async (favId: string) => { try { await apiFetch(`/favorites/${favId}`, { method: "DELETE" }, token); loadFavorites(); } catch {} };
   const { results: geoResults, searching } = useAddressSearch(query, pickup);
+  const { results: stopResults, searching: stopSearching } = useAddressSearch(stopQuery, pickup);
 
   // GPS position becomes the default pickup as soon as it is known
   useEffect(() => { if (gps.place && pickup.id !== "gps") setPickup(gps.place); }, [gps.place]);
@@ -154,7 +159,7 @@ export default function PassengerHome() {
       const mh = services.find((s) => s.key === svc)?.pricing === "hourly" ? services.find((s) => s.key === svc)!.min_hours : 0;
       const res = await apiFetch<{ options: Estimate[]; surcharge: Surcharge; hours: number }>("/rides/estimate", {
         method: "POST",
-        body: JSON.stringify({ pickup: { lat: from.lat, lng: from.lng, address: from.address }, dropoff: { lat: to.lat, lng: to.lng, address: to.address }, ...tripPayload(svc, t, mh) }),
+        body: JSON.stringify({ pickup: { lat: from.lat, lng: from.lng, address: from.address }, dropoff: { lat: to.lat, lng: to.lng, address: to.address }, stops: stops.map((s) => ({ lat: s.lat, lng: s.lng, address: s.address })), ...tripPayload(svc, t, mh) }),
       }, token);
       setEstimates(res.options);
       setSurcharge(res.surcharge);
@@ -168,7 +173,7 @@ export default function PassengerHome() {
   };
 
   // Re-estimate when service / passengers / luggage / hours change
-  const tripKey = `${service}|${trip.passengers}|${trip.children}|${trip.luggage}|${trip.hours}`;
+  const tripKey = `${service}|${trip.passengers}|${trip.children}|${trip.luggage}|${trip.hours}|${stops.map((s) => s.id).join(",")}`;
   useEffect(() => { if (dropoff) loadEstimate(pickup, dropoff); }, [tripKey]);
 
   const choosePlace = async (p: Place) => {
@@ -192,10 +197,10 @@ export default function PassengerHome() {
     if (ok) setSearchMode("dropoff");
   };
 
-  const reset = () => { setDropoff(null); setEstimates([]); setSelected(null); setSurcharge(null); setOptions(DEFAULT_OPTIONS); setTrip(DEFAULT_TRIP); setSearchMode("dropoff"); };
+  const reset = () => { setDropoff(null); setStops([]); setEstimates([]); setSelected(null); setSurcharge(null); setOptions(DEFAULT_OPTIONS); setTrip(DEFAULT_TRIP); setSearchMode("dropoff"); };
 
   const currentItem = (): CartItem | null => (dropoff && selected && surcharge)
-    ? { key: `${Date.now()}`, pickup, dropoff, vehicle: selected, options, surcharge, service, trip: { ...trip, hours: Math.max(trip.hours, minHours) } } : null;
+    ? { key: `${Date.now()}`, pickup, dropoff, stops, vehicle: selected, options, surcharge, service, trip: { ...trip, hours: Math.max(trip.hours, minHours) } } : null;
 
   const orderNow = async () => {
     const it = currentItem();
@@ -350,6 +355,20 @@ export default function PassengerHome() {
               <Pressable testID="reset-dropoff" onPress={reset} hitSlop={8}><Icon name="close" size={22} color={theme.color.onSurfaceSecondary} /></Pressable>
             </View>
 
+            {stops.map((s, i) => (
+              <View key={s.id} style={styles.stopRow} testID={`home-stop-${i}`}>
+                <Icon name="map-marker-path" size={18} color={theme.color.onSurfaceSecondary} />
+                <Text style={styles.stopText} numberOfLines={1}>Arrêt {i + 1} · {s.name}</Text>
+                <Pressable testID={`home-stop-up-${i}`} onPress={() => setStops((a) => { const b = [...a]; if (i > 0) { [b[i - 1], b[i]] = [b[i], b[i - 1]]; } return b; })} hitSlop={6}><Icon name="chevron-up" size={20} color={theme.color.onSurfaceTertiary} /></Pressable>
+                <Pressable testID={`home-stop-del-${i}`} onPress={() => setStops((a) => a.filter((_, idx) => idx !== i))} hitSlop={6}><Icon name="close" size={18} color={theme.color.error} /></Pressable>
+              </View>
+            ))}
+            {stops.length < 8 && (
+              <Pressable testID="home-add-stop" onPress={() => { setStopQuery(""); setStopPickerOpen(true); }} style={styles.addStopBtn}>
+                <Icon name="plus" size={18} color={theme.color.onSurface} /><Text style={styles.secondaryText}>Ajouter un arrêt</Text>
+              </Pressable>
+            )}
+
             {services.length > 0 && (
               <ServicePicker services={services} value={service} onChange={(sv) => { setService(sv.key); setTrip((t) => ({ ...t, hours: sv.pricing === "hourly" ? Math.max(t.hours, sv.min_hours) : 0 })); }} />
             )}
@@ -399,6 +418,19 @@ export default function PassengerHome() {
         {favLabel === "Autre" && <TextInput testID="fav-custom" value={favCustom} onChangeText={setFavCustom} placeholder="Nom (ex. Salle de sport)" placeholderTextColor={theme.color.onSurfaceTertiary} style={[styles.searchWrap, { marginTop: theme.spacing.md, color: theme.color.onSurface, fontSize: 15 }]} />}
         <Text style={[styles.placeAddr, { marginTop: theme.spacing.md }]}>Vos favoris apparaissent en tête de liste pour commander en deux touches.</Text>
       </SheetModal>
+
+      <SheetModal visible={stopPickerOpen} onClose={() => setStopPickerOpen(false)} title="Ajouter un arrêt" subtitle="2 min offertes par arrêt, puis 1 €/min" testID="stop-picker">
+        <View style={styles.searchWrap}>
+          {stopSearching ? <ActivityIndicator size="small" color={theme.color.onSurfaceTertiary} /> : <Icon name="magnify" size={20} color={theme.color.onSurfaceTertiary} />}
+          <TextInput testID="stop-search" value={stopQuery} onChangeText={setStopQuery} placeholder="Adresse de l'arrêt" placeholderTextColor={theme.color.onSurfaceTertiary} style={styles.searchInput} autoFocus />
+        </View>
+        {[...favorites, ...POPULAR_PLACES].filter((p) => !stopQuery.trim() || p.name.toLowerCase().includes(stopQuery.toLowerCase())).slice(0, stopQuery.trim() ? 0 : 4).concat(stopResults as any).map((p: any) => (
+          <Pressable key={p.id} testID={`stop-place-${p.id}`} onPress={() => { setStops((s) => [...s, p]); setStopPickerOpen(false); }} style={styles.placeRow}>
+            <View style={styles.placeIcon}><Icon name={(p as any).icon || "map-marker-outline"} size={20} color={theme.color.onSurface} /></View>
+            <View style={{ flex: 1 }}><Text style={styles.placeName}>{p.name}</Text><Text style={styles.placeAddr} numberOfLines={1}>{p.address}</Text></View>
+          </Pressable>
+        ))}
+      </SheetModal>
     </View>
   );
 }
@@ -426,6 +458,9 @@ const styles = StyleSheet.create({
   tripLabel: { fontSize: 11, color: theme.color.onSurfaceTertiary, fontWeight: "600", textTransform: "uppercase" },
   tripAddr: { fontSize: 15, color: theme.color.onSurface, fontWeight: "600", marginTop: 2 },
   tripDivider: { height: 1, backgroundColor: theme.color.border, marginVertical: theme.spacing.sm },
+  stopRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, height: 48, marginTop: theme.spacing.sm },
+  stopText: { flex: 1, fontSize: 14, color: theme.color.onSurface, fontWeight: "600" },
+  addStopBtn: { flexDirection: "row", gap: theme.spacing.sm, alignItems: "center", justifyContent: "center", height: 46, borderRadius: theme.radius.pill, borderWidth: 1.5, borderColor: theme.color.borderStrong, borderStyle: "dashed", marginTop: theme.spacing.sm },
   fixedRoute: { fontSize: 12, fontWeight: "700", color: theme.color.success, marginBottom: theme.spacing.sm },
   policy: { fontSize: 11, color: theme.color.onSurfaceTertiary, marginTop: theme.spacing.md, lineHeight: 15 },
   sectionTitle: { fontSize: 18, fontWeight: "800", color: theme.color.onSurface, marginTop: theme.spacing.xl, marginBottom: theme.spacing.md },

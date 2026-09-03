@@ -14,6 +14,7 @@ import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { money, fmtDateTime } from "@/src/utils/format";
 import RideChat, { ChatButton } from "@/src/components/RideChat";
+import RideEditSheet from "@/src/components/passenger/RideEditSheet";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -31,6 +32,7 @@ export default function RideDetail() {
   const [submittingRate, setSubmittingRate] = useState(false);
   const [paying, setPaying] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -200,10 +202,28 @@ export default function RideDetail() {
 
           <View style={styles.routeBox}>
             <View style={styles.routeRow}><View style={[styles.dot, { backgroundColor: theme.color.success }]} /><Text style={styles.routeText} numberOfLines={1}>{ride.pickup.address}</Text></View>
+            {(ride.stops || []).map((s: any, i: number) => (
+              <View key={i}><View style={styles.line} /><View style={styles.routeRow} testID={`ride-stop-${i}`}><Icon name="map-marker-path" size={14} color={theme.color.onSurfaceSecondary} /><Text style={styles.routeText} numberOfLines={1}>{s.address}</Text>{ride.stop_waits?.[i]?.fee > 0 ? <Text style={{ fontSize: 12, color: theme.color.error, fontWeight: "700" }}>+{money(ride.stop_waits[i].fee)}</Text> : null}</View></View>
+            ))}
             <View style={styles.line} />
             <View style={styles.routeRow}><Icon name="map-marker" size={14} color={theme.color.error} /><Text style={styles.routeText} numberOfLines={1}>{ride.dropoff.address}</Text></View>
             {ride.notes ? <Text style={styles.notes}>📝 {ride.notes}</Text> : null}
           </View>
+
+          {["requested", "accepted", "in_progress"].includes(ride.status) && (
+            <Pressable testID="modify-ride" onPress={() => setEditOpen(true)} style={styles.shareBtn}>
+              <Icon name="pencil-outline" size={18} color={theme.color.onSurface} />
+              <Text style={styles.shareText}>Modifier la course</Text>
+            </Pressable>
+          )}
+          <RideEditSheet visible={editOpen} onClose={() => setEditOpen(false)} ride={ride} onSaved={load} />
+
+          {ride.waiting_active && (
+            <View style={styles.arrivingBox} testID="waiting-box">
+              <Icon name="timer-sand" size={18} color={theme.color.success} />
+              <Text style={styles.arrivingText}>Attente en cours · {ride.breakdown?.waiting > 0 ? `${money(ride.breakdown.waiting)} (temps gratuit dépassé)` : "temps gratuit en cours"}</Text>
+            </View>
+          )}
 
           <View style={styles.priceBox} testID="ride-price-box">
             <View style={styles.priceRow}><Text style={styles.priceLabel}>Course ({ride.distance_km.toFixed(1)} km)</Text><Text style={styles.priceSmall}>{money(ride.base_price)}</Text></View>
@@ -219,9 +239,15 @@ export default function RideDetail() {
             {ride.tip > 0 && (
               <View style={styles.priceRow}><Text style={styles.priceLabel}>Pourboire {ride.tip_paid ? "(payé par carte)" : ride.payment_method === "cash" ? "(en espèces)" : ""}</Text><Text style={styles.priceSmall}>+{money(ride.tip)}</Text></View>
             )}
+            {(ride.waiting_fee > 0 || ride.breakdown?.waiting > 0) && (
+              <View style={styles.priceRow}><Text style={styles.priceLabel}>Temps d'attente</Text><Text style={styles.priceSmall}>+{money(ride.status === "completed" ? ride.waiting_fee : ride.breakdown?.waiting)}</Text></View>
+            )}
+            {ride.toll_amount > 0 && (
+              <View style={styles.priceRow}><Text style={styles.priceLabel}>Péages</Text><Text style={styles.priceSmall}>+{money(ride.toll_amount)}</Text></View>
+            )}
             <View style={[styles.priceRow, { marginTop: 4 }]}>
-              <Text style={styles.priceTotalLabel}>Total</Text>
-              <Text style={styles.priceValue}>{money(ride.price)}</Text>
+              <Text style={styles.priceTotalLabel}>Total{ride.status !== "completed" && (ride.breakdown?.waiting > 0) ? " estimé" : ""}</Text>
+              <Text style={styles.priceValue}>{money(ride.status === "completed" ? ride.price : (ride.breakdown?.total ?? ride.price))}</Text>
             </View>
             {ride.wallet_amount > 0 && (
               <>

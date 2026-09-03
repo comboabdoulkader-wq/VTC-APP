@@ -126,6 +126,7 @@ class TripDetailsMixin(BaseModel):
 class EstimateIn(TripDetailsMixin):
     pickup: LocationIn
     dropoff: LocationIn
+    stops: List[LocationIn] = Field(default_factory=list, max_length=8)
 
 
 class VehicleEstimate(BaseModel):
@@ -167,6 +168,7 @@ class EstimateOut(BaseModel):
 class RideCreateIn(TripDetailsMixin):
     pickup: LocationIn
     dropoff: LocationIn
+    stops: List[LocationIn] = Field(default_factory=list, max_length=8)
     vehicle_type: VehicleType
     surcharge_enabled: bool = False
     scheduled_at: Optional[datetime] = None
@@ -180,6 +182,19 @@ class RideCreateIn(TripDetailsMixin):
 
 class RideBatchIn(BaseModel):
     rides: List[RideCreateIn] = Field(min_length=1, max_length=10)
+
+
+class RideModifyIn(BaseModel):
+    """Passenger edits an existing ride before it is completed. All fields optional."""
+    pickup: Optional[LocationIn] = None
+    dropoff: Optional[LocationIn] = None
+    stops: Optional[List[LocationIn]] = Field(default=None, max_length=8)
+    vehicle_type: Optional[VehicleType] = None
+    scheduled_at: Optional[datetime] = None
+    passengers: Optional[int] = Field(default=None, ge=1, le=16)
+    children: Optional[int] = Field(default=None, ge=0, le=10)
+    child_seats: Optional[int] = Field(default=None, ge=0, le=4)
+    luggage: Optional[int] = Field(default=None, ge=0, le=20)
 
 
 class DriverLocation(BaseModel):
@@ -207,6 +222,7 @@ class RideOut(BaseModel):
     driver_eta_min: Optional[int] = None
     pickup: LocationIn
     dropoff: LocationIn
+    stops: List[LocationIn] = []
     vehicle_type: VehicleType
     base_price: float
     surcharge_enabled: bool = False
@@ -255,6 +271,14 @@ class RideOut(BaseModel):
     fixed_route_name: Optional[str] = None
     flight: Optional[dict] = None
     review: Optional[dict] = None
+    arrived_at: Optional[datetime] = None
+    waiting_departure_min: float = 0
+    waiting_departure_fee: float = 0
+    waiting_active: bool = False
+    stop_waits: Optional[list] = None
+    waiting_fee: float = 0
+    toll_amount: float = 0
+    breakdown: Optional[dict] = None
 
 
 class RateIn(BaseModel):
