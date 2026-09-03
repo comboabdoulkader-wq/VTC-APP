@@ -15,6 +15,7 @@ import AdminDashboard from "@/src/components/admin/AdminDashboard";
 import CommissionSettings from "@/src/components/admin/CommissionSettings";
 import PromosManager from "@/src/components/PromosManager";
 import WalletCard from "@/src/components/WalletCard";
+import DriverWallet from "@/src/components/driver/DriverWallet";
 import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
 import AccountSection from "@/src/components/AccountSection";
 import LanguagePicker from "@/src/components/LanguagePicker";
@@ -35,6 +36,7 @@ export default function DriverProfile() {
   const [showApi, setShowApi] = useState(false);
   const [showDash, setShowDash] = useState(false);
   const [showComm, setShowComm] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
   const [nav, setNav] = useState<NavApp | null>(null);
   useEffect(() => { getNavApp().then(setNav); }, []);
@@ -108,6 +110,12 @@ export default function DriverProfile() {
       </View>
 
       <WalletCard />
+      <Pressable testID="open-driver-wallet" onPress={() => setShowWallet(true)} style={[styles.menuGroup, { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg }]}>
+        <Icon name="wallet-outline" size={22} color={theme.color.onSurface} />
+        <Text style={{ flex: 1, fontSize: 15, color: theme.color.onSurface, fontWeight: "600" }}>Versements & gains</Text>
+        <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+      </Pressable>
+      <DriverWallet visible={showWallet} onClose={() => setShowWallet(false)} />
       <PhoneVerifyCard />
       <LanguagePicker />
       <AccountSection />

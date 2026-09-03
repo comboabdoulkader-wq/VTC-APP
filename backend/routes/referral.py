@@ -150,3 +150,22 @@ async def apply_code(data: ApplyCodeIn, user=Depends(current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": {"sponsor_id": sponsor["id"], "sponsored_at": now_utc()}})
     await notify(sponsor["id"], "wallet", "Nouveau filleul", f"{user['full_name']} a rejoint votre réseau. Vous gagnerez des crédits sur ses courses.")
     return {"ok": True, "sponsor_name": sponsor["full_name"]}
+
+
+@router.get("/loyalty")
+async def my_loyalty(user=Depends(current_user)):
+    """Passenger loyalty status: tier (Bronze->Platine), completed rides, progress and cashback bonus."""
+    from routes.adminpanel import PASSENGER_TIERS, passenger_tier, get_settings
+    done = await db.rides.count_documents({"passenger_id": user["id"], "status": "completed"})
+    tier = passenger_tier(done)
+    higher = [t for t in PASSENGER_TIERS if t["min_rides"] > done]
+    nxt = min(higher, key=lambda t: t["min_rides"]) if higher else None
+    settings = await get_settings()
+    bonus = (settings.get("cashback", {}).get("tiers") or {}).get(tier["key"], 0)
+    return {
+        "tier": tier["key"], "label": tier["label"], "completed": done,
+        "next_label": nxt["label"] if nxt else None, "next_min": nxt["min_rides"] if nxt else None,
+        "to_next": (nxt["min_rides"] - done) if nxt else 0,
+        "cashback_bonus": bonus,
+        "levels": [{"key": t["key"], "label": t["label"], "min_rides": t["min_rides"], "reached": done >= t["min_rides"]} for t in reversed(PASSENGER_TIERS)],
+    }

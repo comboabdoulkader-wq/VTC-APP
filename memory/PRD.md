@@ -167,3 +167,9 @@ See /app/memory/test_credentials.md
 - frontend: AdminDashboard.tsx (admin-dashboard: KPI grid + live row + daily bar chart) and CommissionSettings.tsx (commission-settings: platform %, per-vehicle %, cashback toggle+rate+per-vehicle). Menu entries open-admin-dashboard + open-commission-settings added to driver/passenger/company profiles (moderators only).
 - Verified: settings default/save, dashboard aggregation (98 rides/1639€/147€ comm/45.9% cancel), cashback credited (van 8% + silver 1% = 9€ on 100€, idempotent), 403 non-moderator. Dashboard UI screenshot confirmed.
 - Still pending from spec: real payment provider wiring (Wave/Orange Money needs external API + native build), promo engine, biometrics/2FA, offline maps.
+
+## Iteration 25 – Fidélité client visible + Wallet chauffeur (versements) (DONE, backend verified + UI)
+- backend: GET /loyalty (referral.py) → passenger tier (bronze/silver10/gold30/platinum75), completed count, next_label/min, to_next, cashback_bonus, levels[]. driver.py GET /driver/wallet (balance, transactions, payouts, min_payout) + POST /driver/wallet/payout (min 10€, debits wallet type payout, creates db.payouts pending so it appears in admin PayoutsAdmin, notifies moderators).
+- frontend: LoyaltyCard.tsx (loyalty-card) in passenger profile (tier badge, progress bar, 4-level ladder). DriverWallet.tsx (driver-wallet) sheet opened from driver profile 'Versements & gains' (open-driver-wallet): balance hero, payout input/btn, payouts + tx history.
+- Verified: /loyalty (Argent, 14 done, +1%), driver wallet + payout guards (422/400), UI screenshot confirmed.
+- Still pending: real payment provider wiring (Wave/Orange Money — external API + native build), advanced promo engine (city/heure/nouveau client/anniversaire), biometrics/2FA, offline maps.

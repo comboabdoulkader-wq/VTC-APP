@@ -16,6 +16,7 @@ import CommissionSettings from "@/src/components/admin/CommissionSettings";
 import PromosManager from "@/src/components/PromosManager";
 import CompanyJoinCard from "@/src/components/CompanyJoinCard";
 import WalletCard from "@/src/components/WalletCard";
+import LoyaltyCard from "@/src/components/passenger/LoyaltyCard";
 import PhoneVerifyCard from "@/src/components/PhoneVerifyCard";
 import AccountSection from "@/src/components/AccountSection";
 import LanguagePicker from "@/src/components/LanguagePicker";
@@ -71,6 +72,7 @@ export default function Profile() {
         </View>
       </View>
 
+      <LoyaltyCard />
       <WalletCard />
       <PhoneVerifyCard />
       <LanguagePicker />

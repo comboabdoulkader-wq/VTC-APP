@@ -6,7 +6,7 @@ from core import (
     ARRIVAL_ALERT_MIN, CITY_CENTER, PRIVATE_COMMISSION_RATE, db, eta_minutes, new_id,
     notify, now_utc, require_role, working_driver,
 )
-from models import DriverStatusIn, LocationUpdateIn, PrivateRideIn, PrivateRideUpdateIn, RideOut
+from models import DriverStatusIn, LocationUpdateIn, PayoutIn, PrivateRideIn, PrivateRideUpdateIn, RideOut
 from serializers import ride_to_out
 
 router = APIRouter(prefix="/driver", tags=["driver"])
@@ -164,3 +164,31 @@ async def delete_private(ride_id: str, user=Depends(driver_only)):
     if res.deleted_count == 0:
         raise HTTPException(404, "Suppression impossible")
     return {"ok": True}
+
+
+@router.get("/wallet")
+async def driver_wallet(user=Depends(driver_only)):
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
+    tx = [t async for t in db.wallet_tx.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50)]
+    payouts = [p async for p in db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(30)]
+    return {"balance": round((fresh or {}).get("wallet_balance", 0) or 0, 2), "transactions": tx, "payouts": payouts, "min_payout": 10.0}
+
+
+@router.post("/wallet/payout")
+async def driver_payout(data: PayoutIn, user=Depends(driver_only)):
+    from routes.referral import credit_wallet
+    from core import MODERATOR_EMAILS
+    amount = round(data.amount, 2)
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "wallet_balance": 1})
+    balance = round((fresh or {}).get("wallet_balance", 0) or 0, 2)
+    if amount < 10.0:
+        raise HTTPException(422, "Montant minimum de versement : 10 €")
+    if amount > balance + 1e-6:
+        raise HTTPException(400, f"Solde insuffisant : {balance:.2f} € disponibles")
+    await credit_wallet(user["id"], -amount, "payout", f"Versement chauffeur · {user.get('full_name')}")
+    await db.payouts.insert_one({"id": new_id(), "user_id": user["id"], "partner_name": user.get("full_name"),
+                                 "amount": amount, "status": "pending", "note": "Chauffeur", "created_at": now_utc(),
+                                 "settled_at": None, "settled_by": None})
+    async for mod in db.users.find({"email": {"$in": list(MODERATOR_EMAILS)}}, {"_id": 0, "id": 1}):
+        await notify(mod["id"], "wallet", "Demande de versement", f"{user.get('full_name')} (chauffeur) demande {amount:.2f} €")
+    return {"ok": True, "amount": amount, "balance": round(balance - amount, 2)}
