@@ -122,3 +122,8 @@ See /app/memory/test_credentials.md
 - i18n keys now cover statuses, tabs (passenger/driver/company), profile titles, legal; remaining FR strings: rides subtitle, RideSummary chips, company dashboard, driver/company inner screens, RideOptions, profile cards
 - Notifications localized via `catalog.NOTIF_I18N` (types accepted/started/completed/cancelled/arriving/reminder/flight) in `core.notify()`
 - Legal: `GET /legal?lang=` (terms/privacy/cancellation fr/en) → LegalSheet from AccountSection. Support contacts still to be provided by user (env SUPPORT_*)
+
+## Iteration 16–17 – Email receipts, Google sign-in, responsive audit (DONE, tested)
+- Receipts: `emailer.py` (Emergent Resend proxy, EMAIL_FROM_NAME env), auto after paid completion, `GET /rides/{id}/receipt.pdf`, `POST /rides/{id}/send-receipt`, signed `GET /receipts/{id}.pdf?sig=`; UI buttons on ride detail
+- Google sign-in: `POST /auth/session` (Emergent session-data → our JWT), `useGoogleAuth`/`GoogleButton` on login & register, callback in `app/index.tsx`
+- Responsive: `useResponsive` (compact/tablet/desktop, FRAME_WIDTH 560), framed root & SheetModal on ≥600 px, dynamic snap points, wrap rows on compact phones, capped font scaling. Audit tested on 320/390/768/844x390/1280 – all pass
