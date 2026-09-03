@@ -286,12 +286,32 @@ async def notify(user_id: Optional[str], type_: str, title: str, body: str, ride
         "created_at": now_utc(),
     }
     await db.notifications.insert_one(doc)
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1, "phone": 1, "phone_verified": 1, "sms_enabled": 1})
+    # Push notification (works on native builds; silently skipped when the relay is unavailable)
+    from push import push_safe
+    role = (u or {}).get("role")
+    action_url = f"/(passenger)/ride/{ride_id}" if role == "passenger" and ride_id else f"/({role})" if role in ("driver", "company") else None
+    await push_safe([user_id], title, body, action_url, idempotency_key=doc["id"])
     text = f"RideGo · {title} – {body}"
     if sms:
-        u = await db.users.find_one({"id": user_id}, {"_id": 0, "phone": 1, "phone_verified": 1, "sms_enabled": 1})
         if u and u.get("phone_verified") and u.get("sms_enabled", True) and u.get("phone"):
             await send_sms(u["phone"], text)
     elif sms_phone:
         p = normalize_phone(sms_phone)
         if p:
             await send_sms(p, text)
+
+
+def tracking_url(ride: dict) -> Optional[str]:
+    base = os.environ.get("FRONTEND_URL", "").strip('"').rstrip("/")
+    return f"{base}/track/{ride['share_token']}" if base and ride.get("share_token") else None
+
+
+async def send_tracking_link(ride: dict):
+    """SMS the passenger a live tracking link once a driver is assigned (verified phone + SMS alerts enabled)."""
+    url = tracking_url(ride)
+    if not url or not ride.get("passenger_id"):
+        return
+    u = await db.users.find_one({"id": ride["passenger_id"]}, {"_id": 0, "phone": 1, "phone_verified": 1, "sms_enabled": 1})
+    if u and u.get("phone_verified") and u.get("sms_enabled", True) and u.get("phone"):
+        await send_sms(u["phone"], f"RideGo · {ride.get('driver_name', 'Votre chauffeur')} arrive ({ride.get('driver_vehicle', '')} {ride.get('driver_plate', '')}). Suivez-le en direct : {url}")

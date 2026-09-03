@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core import REMINDER_MIN, client, db, notify, now_utc, seed_cities
+import push
 from routes import auth, company, documents, driver, extras, geo_routes, notifications, passenger_extras, payments, referral, rides, team
 from routes.documents import compliance_sweep
 from storage import init_storage
@@ -24,6 +25,7 @@ async def root():
 
 for r in (auth.router, rides.router, driver.router, team.router, payments.router, notifications.router, company.router, geo_routes.router, documents.router, extras.router, passenger_extras.router, referral.router):
     api.include_router(r)
+api.include_router(push.router)
 
 app.include_router(api)
 

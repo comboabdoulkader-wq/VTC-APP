@@ -96,3 +96,15 @@ See /app/memory/test_credentials.md
 - app.json: removed `newArchEnabled` and `android.edgeToEdgeEnabled` (defaults in SDK 57 schema). expo-doctor 21/21 OK, tsc OK
 - Replaced deprecated `shadow*`/`elevation` styles by `boxShadow`; `pointerEvents` prop → style
 - Frontend regression smoke test PASS (iteration_9 report)
+
+## Iteration 12 – Phase 1 of the premium roadmap
+- Forgot password by SMS OTP: `POST /auth/forgot-password {identifier}` (email or phone, needs a verified phone) → `POST /auth/reset-password {identifier, code, new_password}` → auto-login. Screen `(auth)/forgot-password`, link on login
+- Push notifications (Emergent managed relay, `backend/push.py`): `POST /api/register-push` (auth), `push_safe()` called from `notify()` (every in-app notification → push with action_url) and on new ride → all online eligible drivers. Frontend: handlers in `_layout.tsx`, `PushRegistrar` (after login + on foreground), `expo-notifications` plugin. Needs `google-services.json` (user has none yet) + native build; `EMERGENT_PUSH_KEY=placeholder` replaced at deploy
+- Tracking-link SMS on accept (`core.send_tracking_link`, uses `FRONTEND_URL/track/{share_token}`)
+
+## Roadmap agreed with user (do not remove existing features)
+- Phase 2 Booking premium: 8 service types (airport, private, hourly, business, city tour, events, long distance, special occasions), passengers/children/child seats/luggage, flight number + airline (AviationStack – key to be provided), fixed-price routes managed in back-office (CDG → Paris 75 €), vehicle cards (photo, capacity), booking number, cancellation conditions, "Book again", detailed ratings
+- Phase 3 i18n FR/EN/ES/AR/ZH/PT (auto-detect + profile) – app, notifications, SMS
+- Phase 4 Trust & support: FAQ, support (WhatsApp/email/phone – details later), legal pages, company identity
+- Phase 5 Admin back-office (clients, bookings, payments, zones, pricing grid) + hotel/concierge partner space
+- Phase 6 International: Google/Apple sign-in, Apple Pay/Google Pay (Stripe), email receipts, SEO website

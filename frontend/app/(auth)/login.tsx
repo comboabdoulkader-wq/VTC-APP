@@ -83,6 +83,10 @@ export default function Login() {
 
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
 
+        <Pressable testID="forgot-password" onPress={() => router.push("/(auth)/forgot-password" as any)} style={styles.forgot} hitSlop={8}>
+          <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+        </Pressable>
+
         <Pressable
           testID="login-submit-button"
           onPress={submit}
@@ -111,6 +115,8 @@ const styles = StyleSheet.create({
   pwdRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   eye: { width: 48, height: 56, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
   error: { color: theme.color.error, fontSize: 14, marginBottom: theme.spacing.md },
+  forgot: { alignSelf: "flex-end", minHeight: 40, justifyContent: "center" },
+  forgotText: { fontSize: 14, fontWeight: "700", color: theme.color.onSurface, textDecorationLine: "underline" },
   primary: { backgroundColor: theme.color.brand, height: 56, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", marginTop: theme.spacing.md, marginBottom: theme.spacing.lg },
   primaryText: { color: theme.color.onBrand, fontWeight: "700", fontSize: 16 },
   link: { textAlign: "center", color: theme.color.onSurfaceSecondary, fontSize: 14 },

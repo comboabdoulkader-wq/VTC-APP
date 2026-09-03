@@ -2,12 +2,14 @@ import hashlib
 import hmac
 import secrets
 from datetime import timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import (JWT_SECRET, MODERATOR_EMAILS, client_ip, current_user, db, hash_password, make_token, new_id, normalize_phone, now_utc,
                   rate_limit, send_sms, sms_configured, verify_password)
-from models import LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, TokenOut, UserOut
+from models import (ForgotPasswordIn, LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, ResetPasswordIn, TokenOut,
+                    UserOut)
 from serializers import user_to_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -176,3 +178,64 @@ async def verify_phone_code(data: PhoneVerifyIn, user=Depends(current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": update, "$unset": {"phone_otp": ""}})
     user.update(update)
     return user_to_out(user)
+
+
+# ---------- Forgot password (SMS OTP to the verified phone) ----------
+def _mask_phone(p: str) -> str:
+    return p[:4] + " " + "•• •• ••" + " " + p[-2:]
+
+
+async def _find_for_reset(identifier: str) -> Optional[dict]:
+    ident = identifier.strip()
+    if "@" in ident:
+        return await db.users.find_one({"email": ident.lower()}, {"_id": 0})
+    phone = normalize_phone(ident)
+    return await db.users.find_one({"phone": phone}, {"_id": 0}) if phone else None
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordIn, request: Request):
+    rate_limit(f"forgot-ip:{client_ip(request)}", 10, 900)
+    rate_limit(f"forgot:{data.identifier.strip().lower()}", 3, 600, "Trop de codes demandés, réessayez dans 10 minutes")
+    user = await _find_for_reset(data.identifier)
+    if not user or not (user.get("phone_verified") and user.get("phone")):
+        raise HTTPException(404, "Aucun compte avec un numéro vérifié pour cet identifiant. Contactez le support.")
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "reset_otp": {"hash": _otp_hash(code, user["id"]), "expires_at": now_utc() + timedelta(minutes=OTP_TTL_MIN), "attempts": 0},
+    }})
+    delivered = await send_sms(user["phone"], f"RideGo · Code de réinitialisation du mot de passe : {code} (valable {OTP_TTL_MIN} min). Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.")
+    out = {"ok": True, "masked_phone": _mask_phone(user["phone"]), "delivered": delivered, "expires_in_min": OTP_TTL_MIN}
+    if not sms_configured():
+        out["dev_code"] = code
+    return out
+
+
+@router.post("/reset-password", response_model=TokenOut)
+async def reset_password(data: ResetPasswordIn, request: Request):
+    rate_limit(f"reset-ip:{client_ip(request)}", 20, 900)
+    user = await _find_for_reset(data.identifier)
+    otp = (user or {}).get("reset_otp")
+    if not user or not otp:
+        raise HTTPException(400, "Aucun code en attente, demandez un nouveau code")
+    if otp.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
+        await db.users.update_one({"id": user["id"]}, {"$unset": {"reset_otp": ""}})
+        raise HTTPException(429, "Trop d'essais, demandez un nouveau code")
+    expires = otp["expires_at"]
+    if expires.tzinfo is None:
+        from datetime import timezone
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires < now_utc():
+        await db.users.update_one({"id": user["id"]}, {"$unset": {"reset_otp": ""}})
+        raise HTTPException(410, "Code expiré, demandez un nouveau code")
+    if not hmac.compare_digest(otp["hash"], _otp_hash(data.code.strip(), user["id"])):
+        await db.users.update_one({"id": user["id"]}, {"$inc": {"reset_otp.attempts": 1}})
+        raise HTTPException(400, "Code incorrect")
+    await db.users.update_one({"id": user["id"]}, {
+        "$set": {"password_hash": hash_password(data.new_password), "password_changed_at": now_utc()},
+        "$unset": {"reset_otp": ""},
+    })
+    if user.get("is_active") is False:
+        raise HTTPException(403, "Compte désactivé par votre gestionnaire")
+    user["is_moderator"] = user["email"] in MODERATOR_EMAILS
+    return TokenOut(access_token=make_token(user), user=user_to_out(user))

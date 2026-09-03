@@ -163,3 +163,7 @@ frontend: PhoneVerifyCard, AccountSection/AccountSettings, WalletCard in 3 profi
 agent_communication:
   - agent: "main"
     message: "Please test: phone OTP flow E2E (send code → dev code displayed → verify → badge), SMS switch, account settings (name edit, password change + login with new pwd then revert), register with phone → verify-phone screen, wallet toggle in booking when balance>0 (credit a wallet via a referral chain or directly in DB), ride creation with use_wallet and detail breakdown."
+
+## Iteration 11 – Forgot password (SMS OTP), push notifications relay, tracking-link SMS (main agent)
+backend: push.py (POST /api/register-push auth-protected, send_push/push_safe relay – key placeholder → skipped with log), core.notify() now pushes (action_url by role) + send_tracking_link(ride) on accept (rides.py, team.py), push_new_rides_to_drivers on POST /rides & /rides/batch (online, non-blocked drivers). auth.py: POST /auth/forgot-password {identifier: email|phone} → masked_phone + dev_code (test mode), POST /auth/reset-password {identifier, code, new_password} → TokenOut (auto-login). Manually verified via python requests.
+frontend: (auth)/forgot-password.tsx + "Mot de passe oublié ?" link on login (testID forgot-password), _layout.tsx push handlers (native only), PushRegistrar component, expo-notifications plugin in app.json.

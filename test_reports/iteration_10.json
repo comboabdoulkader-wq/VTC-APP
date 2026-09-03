@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 11 features (forgot-password by SMS OTP, /register-push relay, tracking-link SMS on driver accept) tested end-to-end. Backend: 10/10 pytest cases pass (see /app/backend/tests/test_iteration11_new_features.py). Frontend: forgot-password flow verified on web preview 390x844 – login → 'Mot de passe oublié ?' → forgot-screen → send SMS code → dev_code box shows the 6-digit code and masked_phone subtitle (+336 •• •• •• 32) → wrong code shows 'Code incorrect' → change-id returns to step 1 → back-button returns to login → correct code + new password 'password1234' → auto-login → passenger-home (data-testid=passenger-home) visible. Password reverted to password123 via POST /api/auth/password. Zero page errors and zero console errors on web boot; only two benign expo-notifications warnings ('Listening to push token changes is not yet fully supported on web') from the SDK itself (all push code is guarded by Platform.OS!=='web' in _layout.tsx / PushRegistrar.tsx, warnings originate inside expo-notifications not user code). Ride flow log check confirms both required log lines: 'SMS (non envoyé, Twilio non configuré) -> +33698765432: RideGo · Chauffeur arrive (Peugeot 508 AB-123-CD). Suivez-le en direct : https://vtc-platform-18.preview.emergentagent.com/track/<token>' AND 'Push (non envoyé, clé non configurée) -> [driver_id]: Nouvelle course immédiate' + 'Chauffeur trouvé' / 'Course démarrée' / 'Course terminée' for each notify event. IMPORTANT ISSUE FOUND: testID collision — data-testid=\"forgot-password\" is used on TWO different components (login.tsx line 86 – the 'Mot de passe oublié ?' link, and forgot-password.tsx line 119 – the new-password TextInput). Because the login screen stays in the router Stack while the forgot screen is pushed on top, Playwright locators for 'forgot-password' resolve to 2 elements and fail non-scoped fill()/click() actions. Not a runtime bug for end-users, but a test-automation blocker and a semantic collision. Deprecated packages: none detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "forgot-password.tsx new-password TextInput", "issue": "testID collision: uses testID=\"forgot-password\" which is also used by the login-screen 'Mot de passe oublié ?' Pressable in login.tsx:86. Playwright resolves 2 elements and non-scoped selectors fail. Reference: /app/frontend/app/(auth)/forgot-password.tsx:119 and /app/frontend/app/(auth)/login.tsx:86", "testID": "forgot-password", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "app-wide", "issues": ["Pre-existing warning 'props.pointerEvents is deprecated. Use style.pointerEvents' from react-native-web (unrelated to this iteration)"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11_new_features.py",
+    "/app/test_reports/pytest/iteration11.xml"
+  ],
+  "action_items": [
+    "Rename the new-password TextInput testID in /app/frontend/app/(auth)/forgot-password.tsx:119 from 'forgot-password' to something unique like 'forgot-new-password' (or rename the login link testID) so that Playwright / e2e testing can target it unambiguously. Cosmetic collision, no user-facing bug, but blocks non-scoped test selectors."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/auth.py forgot-password: correct sliding-window rate-limits (3/10min per identifier + 10/15min per IP), OTP hashed with HMAC-SHA256 keyed by JWT_SECRET, dev_code only exposed when sms_configured() is false — sound implementation.",
+    "reset-password sends 410 when OTP expired but returns 400 'Aucun code en attente' when never issued — matches spec.",
+    "push.py register-push: correctly ignores body.user_id and uses the authenticated user_id from the token (server-side trust boundary), 401 from relay → 500 'EMERGENT_PUSH_KEY missing or invalid' surfacing, 5xx → 502 mapping.",
+    "push_safe short-circuits when PUSH_KEY == 'placeholder' with a log — no useless network calls during dev/preview.",
+    "rides.py accept_ride triggers notify(...sms=True) and send_tracking_link(r) — SMS with /track/<share_token> URL is emitted correctly.",
+    "_layout.tsx and PushRegistrar.tsx both guard native-only APIs with Platform.OS !== 'web'; no runtime crashes on web preview."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration11_new_features.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% for the forgot-password flow (all steps pass with scoped selector; testID collision reported)"},
+  "seed_data_creation": "Registered 2 throwaway users during backend tests: TEST_forgot_<hex>@example.com (used for full reset flow) and TEST_rl_<hex>@example.com (used for 3/10min per-identifier rate-limit test). Both have verified phones. No impact on production data. passager@test.com password reverted to password123 after frontend flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Forgot-password quota is 3/10min per identifier (in-memory). Do not exhaust passager@test.com's quota; register a fresh user (register → /auth/phone/send-code → /auth/phone/verify with dev_code) for any rate-limit test. testID 'forgot-password' is used TWICE (login link + forgot-screen password input) — use scoped selector '[data-testid=\"forgot-screen\"] [data-testid=\"forgot-password\"]' or first-match on the login screen. Localstorage key for the auth token was empty on web preview — the auth context appears to use a different storage key (AsyncStorage web adapter); do password reverts through a fresh login instead of pulling from localStorage.",
+  "rca_of_issue": "N/A – all requested features work as designed. One cosmetic testID collision noted (see ui_bugs)."
+}

@@ -3,7 +3,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core import db, hash_password, new_id, notify, now_utc, require_role
+from core import db, hash_password, new_id, notify, now_utc, require_role, send_tracking_link
 from models import AssignIn, RideOut, TeamMemberIn, TeamMemberOut, TeamMemberUpdateIn
 from serializers import ride_to_out, user_to_out
 
@@ -118,6 +118,7 @@ async def assign_ride(data: AssignIn, user=Depends(driver_only)):
                  f"{user['full_name']} vous a affecté : {r['pickup']['address']} → {r['dropoff']['address']}", r["id"])
     await notify(r.get("passenger_id"), "accepted", "Chauffeur trouvé",
                  f"{m['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", r["id"], sms=True)
+    await send_tracking_link(r)
     return ride_to_out(r)
 
 

@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core import (
     VEHICLE_PRICING, base_fare, current_user, db, new_id, notify, now_utc,
-    require_role, surcharge_for, trip_metrics, working_driver,
+    require_role, send_tracking_link, surcharge_for, trip_metrics, working_driver,
 )
+from push import push_safe
 from models import EstimateIn, EstimateOut, RateIn, RideBatchIn, RideCreateIn, RideOut, VehicleEstimate
 from serializers import ride_to_out
 
@@ -114,12 +115,27 @@ async def apply_wallet(user: dict, rides: list):
         await credit_wallet(user["id"], -amt, "ride_payment", f"Paiement course → {r['dropoff']['address'][:40]}", r["id"])
 
 
+async def push_new_rides_to_drivers(rides: list[dict]):
+    """Wake up online drivers (push works even when the app is closed on native builds)."""
+    public = [r for r in rides if not r.get("assigned_driver_id")]
+    if not public:
+        return
+    ids = [d["id"] async for d in db.users.find(
+        {"role": "driver", "is_online": True, "is_active": {"$ne": False}, "docs_blocked": {"$ne": True}}, {"_id": 0, "id": 1}).limit(300)]
+    r = public[0]
+    when = "programmée" if r.get("scheduled_at") else "immédiate"
+    title = f"Nouvelle course {when}" if len(public) == 1 else f"{len(public)} nouvelles courses"
+    body = f"{r['pickup']['address']} → {r['dropoff']['address']} · {r['price']:.2f} €"
+    await push_safe(ids, title, body, "/(driver)", idempotency_key=f"new-{r['id']}")
+
+
 @router.post("", response_model=RideOut)
 async def create_ride(data: RideCreateIn, user=Depends(require_role("passenger"))):
     ride = await build_ride(data, user)
     await check_budget(user, [ride])
     await apply_wallet(user, [ride])
     await db.rides.insert_one(ride.copy())
+    await push_new_rides_to_drivers([ride])
     return ride_to_out(ride)
 
 
@@ -130,6 +146,7 @@ async def create_batch(data: RideBatchIn, user=Depends(require_role("passenger")
     await check_budget(user, rides)
     await apply_wallet(user, rides)
     await db.rides.insert_many([r.copy() for r in rides])
+    await push_new_rides_to_drivers(rides)
     return [ride_to_out(r) for r in rides]
 
 
@@ -206,6 +223,7 @@ async def accept_ride(ride_id: str, user=Depends(working_driver)):
     r.update(update)
     await notify(r.get("passenger_id"), "accepted", "Chauffeur trouvé",
                  f"{user['full_name']} arrive avec {update['driver_vehicle']} ({update['driver_plate']})", ride_id, sms=True)
+    await send_tracking_link(r)
     return ride_to_out(r)
 
 

@@ -51,6 +51,16 @@ class PhoneVerifyIn(BaseModel):
     code: str = Field(min_length=6, max_length=6)
 
 
+class ForgotPasswordIn(BaseModel):
+    identifier: str = Field(min_length=3, max_length=120)  # email or phone number
+
+
+class ResetPasswordIn(BaseModel):
+    identifier: str = Field(min_length=3, max_length=120)
+    code: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(min_length=8, max_length=72)
+
+
 class UserOut(BaseModel):
     id: str
     email: EmailStr

@@ -46,6 +46,7 @@ type AuthCtx = {
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  setSession: (accessToken: string, user: User) => Promise<void>;
 };
 
 type RegisterPayload = {
@@ -131,12 +132,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data.user;
   }, []);
 
+  const setSession = useCallback(async (accessToken: string, u: User) => {
+    await saveToken(accessToken);
+    setToken(accessToken); setUser(u);
+  }, []);
+
   const logout = useCallback(async () => {
     await removeToken();
     setToken(null); setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, token, loading, login, register, logout, refresh }), [user, token, loading, login, register, logout, refresh]);
+  const value = useMemo(() => ({ user, token, loading, login, register, logout, refresh, setSession }), [user, token, loading, login, register, logout, refresh, setSession]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
