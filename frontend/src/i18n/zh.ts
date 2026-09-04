@@ -69,6 +69,7 @@ export const zh: Partial<typeof import("./fr").fr> = {
   rating: "评分",
   rides: "行程",
   tab_private: "私人",
+  tab_planning: "日程",
   tab_team: "团队",
   tab_documents: "文件",
   tab_earnings: "收入",

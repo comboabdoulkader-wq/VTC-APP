@@ -12,6 +12,7 @@ import MapCanvas, { MapMarker } from "@/src/components/MapCanvas";
 import { POPULAR_PLACES, DEFAULT_PICKUP, Place } from "@/src/data/places";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import RideOptions, { DEFAULT_OPTIONS, RideOptionsValue, Surcharge, Budget } from "@/src/components/passenger/RideOptions";
+import BookingWizard from "@/src/components/passenger/BookingWizard";
 import { useMyPosition } from "@/src/hooks/useMyPosition";
 import { useAddressSearch } from "@/src/hooks/useAddressSearch";
 import SheetModal from "@/src/components/ui/SheetModal";
@@ -70,6 +71,7 @@ export default function PassengerHome() {
   const [options, setOptions] = useState<RideOptionsValue>(DEFAULT_OPTIONS);
   const [loadingEstimate, setLoadingEstimate] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [wizardDone, setWizardDone] = useState(false);
   const [activeCount, setActiveCount] = useState(0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
@@ -122,7 +124,7 @@ export default function PassengerHome() {
       const from: Place = { id: `rb-p-${r.id}`, name: r.pickup.address.split(",")[0], address: r.pickup.address, lat: r.pickup.lat, lng: r.pickup.lng };
       const to: Place = { id: `rb-d-${r.id}`, name: r.dropoff.address.split(",")[0], address: r.dropoff.address, lat: r.dropoff.lat, lng: r.dropoff.lng };
       const t: TripDetailsValue = { passengers: r.passengers || 1, children: r.children || 0, childSeats: r.child_seats || 0, luggage: r.luggage || 0, hours: r.hours || 0, flightNumber: r.flight?.number || "", airline: r.flight?.airline || "" };
-      setPickup(from); setService(r.service_type || "private"); setTrip(t); setDropoff(to); setShowCart(false); setSearchMode("dropoff");
+      setPickup(from); setService(r.service_type || "private"); setTrip(t); setDropoff(to); setShowCart(false); setSearchMode("dropoff"); setWizardDone(true);
       sheetRef.current?.snapToIndex(2);
       await loadEstimate(from, to, r.service_type || "private", t, r.vehicle_type);
       router.setParams({ rebook: undefined } as any);
@@ -197,7 +199,15 @@ export default function PassengerHome() {
     if (ok) setSearchMode("dropoff");
   };
 
-  const reset = () => { setDropoff(null); setStops([]); setEstimates([]); setSelected(null); setSurcharge(null); setOptions(DEFAULT_OPTIONS); setTrip(DEFAULT_TRIP); setSearchMode("dropoff"); };
+  const reset = () => { setDropoff(null); setStops([]); setEstimates([]); setSelected(null); setSurcharge(null); setOptions((o) => ({ ...DEFAULT_OPTIONS, business: o.business, scheduledAt: o.scheduledAt })); setTrip(DEFAULT_TRIP); setSearchMode("dropoff"); };
+
+  const onWizardDone = (business: boolean, schedule: Date | null) => {
+    setOptions((o) => ({ ...o, business, scheduledAt: schedule, paymentMethod: business ? "cash" : o.paymentMethod }));
+    setWizardDone(true);
+    setShowCart(false);
+    setSearchMode("dropoff");
+    sheetRef.current?.snapToIndex(2);
+  };
 
   const currentItem = (): CartItem | null => (dropoff && selected && surcharge)
     ? { key: `${Date.now()}`, pickup, dropoff, stops, vehicle: selected, options, surcharge, service, trip: { ...trip, hours: Math.max(trip.hours, minHours) } } : null;
@@ -343,6 +353,12 @@ export default function PassengerHome() {
           </BottomSheetView>
         ) : (
           <BottomSheetScrollView contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + theme.spacing.lg }]} keyboardShouldPersistTaps="handled">
+            <Pressable testID="wizard-summary" onPress={() => setWizardDone(false)} style={styles.summaryBar}>
+              <View style={styles.summaryChip}><Icon name={options.business ? "office-building" : "account"} size={14} color={theme.color.onSurface} /><Text style={styles.summaryText}>{options.business ? "Professionnelle" : "Privée"}</Text></View>
+              <View style={styles.summaryChip}><Icon name={options.scheduledAt ? "calendar-clock" : "lightning-bolt"} size={14} color={theme.color.onSurface} /><Text style={styles.summaryText}>{options.scheduledAt ? fmtDateTime(options.scheduledAt) : "Immédiate"}</Text></View>
+              <View style={{ flex: 1 }} />
+              <Icon name="pencil-outline" size={16} color={theme.color.brand} />
+            </Pressable>
             <View style={styles.trip}>
               <Icon name="dots-vertical" size={22} color={theme.color.onSurfaceTertiary} />
               <View style={{ flex: 1 }}>
@@ -386,7 +402,7 @@ export default function PassengerHome() {
             {cancelPolicy ? <Text style={styles.policy} testID="cancellation-policy">{cancelPolicy}</Text> : null}
 
             {selected && surcharge && (
-              <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} budget={budget} walletBalance={walletBalance} />
+              <RideOptions value={options} onChange={setOptions} surcharge={surcharge} basePrice={selected.price} cardEnabled={cardEnabled} budget={budget} walletBalance={walletBalance} showSchedule={false} showBusiness={false} />
             )}
 
             <Pressable testID="confirm-ride-button" disabled={!selected || confirming} onPress={orderNow}
@@ -431,6 +447,16 @@ export default function PassengerHome() {
           </Pressable>
         ))}
       </SheetModal>
+
+      {!wizardDone && (
+        <BookingWizard
+          hasBusinessAccount={!!(budget && budget.active)}
+          companyName={budget?.company}
+          initialBusiness={options.business}
+          initialSchedule={options.scheduledAt}
+          onDone={onWizardDone}
+        />
+      )}
     </View>
   );
 }
@@ -444,7 +470,10 @@ const styles = StyleSheet.create({
   cartChipText: { color: "#fff", fontWeight: "800", fontSize: 14 },
   activeBanner: { position: "absolute", left: theme.spacing.lg, right: theme.spacing.lg, backgroundColor: theme.color.success, flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.md, borderRadius: theme.radius.md },
   activeBannerText: { color: "#fff", fontWeight: "700", flex: 1 },
-  sheetContent: { paddingHorizontal: theme.spacing.xl },
+  sheetContent: { paddingHorizontal: theme.spacing.xl, width: "100%", maxWidth: 640, alignSelf: "center" },
+  summaryBar: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.pill, paddingHorizontal: theme.spacing.md, height: 40, marginTop: theme.spacing.sm, marginBottom: theme.spacing.sm },
+  summaryChip: { flexDirection: "row", alignItems: "center", gap: 4 },
+  summaryText: { fontSize: 12, fontWeight: "700", color: theme.color.onSurface },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sheetTitle: { fontSize: 22, fontWeight: "800", color: theme.color.onSurface, marginTop: theme.spacing.sm, marginBottom: theme.spacing.md },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, height: 52, marginBottom: theme.spacing.md },

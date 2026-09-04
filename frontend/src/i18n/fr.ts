@@ -69,6 +69,7 @@ export const fr = {
   rating: "Note",
   rides: "Courses",
   tab_private: "Privées",
+  tab_planning: "Planning",
   tab_team: "Équipe",
   tab_documents: "Documents",
   tab_earnings: "Gains",

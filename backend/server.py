@@ -1,7 +1,7 @@
 """FastAPI backend for VTC ride-hailing app."""
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,6 +71,26 @@ async def reminder_loop():
                              f"Départ dans {REMINDER_MIN} min : {r['pickup']['address']} → {r['dropoff']['address']}", r["id"], sms=True)
                 await notify(r.get("driver_id"), "reminder", f"Course programmée à {when}",
                              f"Prise en charge dans {REMINDER_MIN} min : {r['pickup']['address']} ({r.get('passenger_label') or r['passenger_name']})", r["id"], sms=True)
+            # Multi-step reminders for the assigned driver: 1 h / 30 / 15 / 5 min before pickup.
+            steps = [60, 30, 15, 5]
+            dq = {"driver_id": {"$ne": None}, "scheduled_at": {"$gte": now, "$lte": now + timedelta(minutes=61)},
+                  "status": {"$in": ["accepted", "in_progress"]}}
+            async for r in db.rides.find(dq, {"_id": 0}):
+                sched = r["scheduled_at"]
+                if sched.tzinfo is None:
+                    sched = sched.replace(tzinfo=timezone.utc)
+                mu = (sched - now).total_seconds() / 60
+                sent = set(r.get("driver_reminders_sent") or [])
+                applicable = [s for s in steps if s >= mu and s not in sent]
+                if not applicable:
+                    continue
+                chosen = min(applicable)
+                newly = sorted(sent | {s for s in steps if s >= chosen})
+                await db.rides.update_one({"id": r["id"]}, {"$set": {"driver_reminders_sent": newly}})
+                label = "1 h" if chosen == 60 else f"{chosen} min"
+                when = r["scheduled_at"].strftime("%H:%M")
+                await notify(r.get("driver_id"), "reminder", f"Rappel course · dans {label}",
+                             f"Prise en charge à {when} : {r['pickup']['address']} ({r.get('passenger_label') or r['passenger_name']})", r["id"], sms=(chosen <= 15))
         except Exception as e:  # keep the loop alive
             logging.getLogger("reminders").warning("reminder loop error: %s", e)
         await asyncio.sleep(60)

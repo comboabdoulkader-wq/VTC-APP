@@ -69,6 +69,7 @@ export const ar: Partial<typeof import("./fr").fr> = {
   rating: "التقييم",
   rides: "الرحلات",
   tab_private: "خاصة",
+  tab_planning: "الجدول",
   tab_team: "الفريق",
   tab_documents: "المستندات",
   tab_earnings: "الأرباح",

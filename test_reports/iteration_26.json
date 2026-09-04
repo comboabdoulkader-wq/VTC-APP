@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 26 (Driver Planning + Passenger Booking Wizard + Responsive) — BOTH backend and frontend tested end-to-end. Backend: 4/4 pytest (100%) after a bug-fix in server.py reminder_loop (see rca_of_issue). Endpoints/behaviours verified: (1) POST /api/rides with scheduled_at + business=true succeeds for passager@test.com (linked to Acme Conseil company) and returns scheduled_at + business; (2) POST /api/rides for an immediate private ride (scheduled_at null, business false) succeeds; (3) POST /api/rides/{id}/accept as chauffeur@test.com after clearing docs_blocked + assigned_driver_id works and the ride appears in GET /api/driver/planning with scheduled_at/pickup/dropoff/price and correct ascending sort by scheduled_at; (4) reminder_loop multi-step reminders now fire — a driver notification of type 'reminder' with title starting 'Rappel course · dans 5 min' was created within 65s for a ride scheduled ~4 min ahead, ride.driver_reminders_sent was persisted, and re-polling 40s later returned exactly 1 matching 5-min reminder (no duplicate). Frontend (Expo web, mobile 390x844): logging in as passager@test.com immediately shows the full-screen overlay [data-testid=booking-wizard] BEFORE any destination entry. Step 1 shows Type de course with wizard-type-private + wizard-type-business, and the Professionnelle option shows 'Facturée à Acme Conseil'. Tapping wizard-continue reveals Step 2 Réservation with wizard-when-now + wizard-when-scheduled; tapping wizard-when-scheduled reveals wizard-datetime chips. Choosing wizard-when-now + wizard-continue dismisses the wizard, the destination search view appears, and selecting a POPULAR place opens the trip view where wizard-summary is present (chips 'Privée' + 'Immédiate' + pencil), a vehicle list renders and confirm-ride-button is visible; tapping wizard-summary re-opens the wizard. Driver: chauffeur@test.com sees tab-planning in the bottom bar; tapping it shows driver-planning with header 'Planning', renders planning-empty when no scheduled rides, and renders planning-ride-<id> cards with time/countdown/passenger/price/pickup/dropoff/tags when an accepted scheduled ride exists. Responsive (1280x800): booking-wizard card measured 560px wide, centered (left=360, right=920) — not stretched. After completing the wizard the passenger bottom sheet also stays centered (search input width ≈452px inside a ~640px sheet centered at ~ x=360-920). No React Native red-screens, no HTML/CSS misuse detected in these components.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "reminder_loop in server.py", "issue": "Multi-step reminder path failed silently because pymongo returns naive scheduled_at while now_utc() is aware; subtraction raised 'can't subtract offset-naive and offset-aware datetimes' every minute, blocking all 'Rappel course' notifications. FIXED in /app/backend/server.py by promoting sched to timezone.utc before subtraction. Consider the same guard for any other Python-side datetime math on Mongo-fetched timestamps."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration26_planning_wizard.py",
+    "/app/test_reports/pytest/iteration26.xml"
+  ],
+  "action_items": [
+    "None blocking. Optional: audit other loops (e.g., compliance_loop) or places in rides.py that compute deltas from Mongo-fetched datetimes to ensure they also handle naive-vs-aware timestamps.",
+    "Optional: in BookingWizard.tsx add testID='wizard-back' behavioural test coverage (already present in code, not exercised here) — main agent may want a QA scenario going back from step 2."
+  ],
+  "critical_code_review_comments": [
+    "server.py reminder_loop lines ~78-90: naive datetime returned by pymongo required guarding — fix applied. Longer-term: convert stored datetimes to aware on read via a serializer, or set tz_aware=True on the Mongo client so aware datetimes come back directly.",
+    "routes/driver.py driver_planning uses status ∈ {accepted, in_progress} and requires scheduled_at != None — this correctly excludes 'requested' offers awaiting acceptance. Good.",
+    "app/(passenger)/index.tsx: the BookingWizard is gated only by !wizardDone which resets on tapping wizard-summary. If the user reloads the app mid-flow, the wizard re-appears — acceptable but confirm this is intended UX.",
+    "BookingWizard.tsx line 148: maxWidth: 640, alignSelf: 'center' correctly constrains the card on wide screens. Good."
+  ],
+  "updated_files": [
+    "/app/backend/server.py",
+    "/app/backend/tests/test_iteration26_planning_wizard.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Test creates rides via /api/rides as passager@test.com (already linked to Acme Conseil with 60€/month budget) and clears docs_blocked + assigned_driver_id in Mongo before /accept as chauffeur@test.com. Ephemeral test rides are cancelled at teardown; a global cleanup was also run at end of session.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login flow: /welcome shows a language gate first (gate-lang-fr + gate-continue), then the welcome screen has cta-login → login form with email-input/password-input/login-submit-button. The booking wizard opens immediately on passenger home after login (before destination entry). Testing multi-step reminder requires ~60-80s poll because reminder_loop sleeps 60s between iterations. Always clear leftover accepted/in_progress rides for chauffeur@test.com in Mongo before UI or reminder tests, and clear docs_blocked/assigned_driver_id before calling /api/rides/{id}/accept. Backend timezone fix in server.py must remain in place.",
+  "rca_of_issue": "Bug found & fixed: server.py reminder_loop's multi-step section did `mu = (r['scheduled_at'] - now).total_seconds()/60`. now_utc() is timezone-aware but pymongo returns Mongo BSON dates as naive Python datetimes, so subtraction raised TypeError 'can't subtract offset-naive and offset-aware datetimes' on every loop iteration. The FIRST reminder path (single 45-min 'Course programmée') worked because it uses only Mongo-side $gte/$lte on `now`, not Python subtraction, so notifications for that path fired normally — which is why the bug had been invisible. Reproduction: schedule a ride ~4 min ahead, accept it as driver, wait 60s → no 'Rappel course' notification is created and backend log emits WARNING reminders: reminder loop error: can't subtract offset-naive and offset-aware datetimes. Fix: import timezone, and before subtraction do `if sched.tzinfo is None: sched = sched.replace(tzinfo=timezone.utc)`. Verified by re-running test_iteration26_planning_wizard.py::TestDriverReminders which now passes and observing backend log 'Push (non envoyé, clé non configurée) -> [driver_id]: Rappel course · dans 5 min'."
+}

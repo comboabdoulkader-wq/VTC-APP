@@ -69,6 +69,7 @@ export const es: Partial<typeof import("./fr").fr> = {
   rating: "Valoración",
   rides: "Viajes",
   tab_private: "Privados",
+  tab_planning: "Agenda",
   tab_team: "Equipo",
   tab_documents: "Documentos",
   tab_earnings: "Ganancias",

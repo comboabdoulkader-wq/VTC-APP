@@ -13,6 +13,14 @@ router = APIRouter(prefix="/driver", tags=["driver"])
 driver_only = require_role("driver")
 
 
+@router.get("/planning", response_model=List[RideOut])
+async def driver_planning(user=Depends(driver_only)):
+    """Upcoming scheduled rides assigned to this driver (accepted/in progress), soonest first."""
+    q = {"driver_id": user["id"], "scheduled_at": {"$ne": None}, "status": {"$in": ["accepted", "in_progress"]}}
+    cursor = db.rides.find(q, {"_id": 0}).sort("scheduled_at", 1)
+    return [ride_to_out(r) async for r in cursor]
+
+
 @router.post("/status")
 async def driver_status(data: DriverStatusIn, user=Depends(driver_only)):
     if data.is_online and user.get("docs_blocked"):

@@ -41,9 +41,11 @@ type Props = {
   cardEnabled: boolean;
   budget?: Budget | null;
   walletBalance?: number;
+  showSchedule?: boolean;
+  showBusiness?: boolean;
 };
 
-export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled, budget, walletBalance = 0 }: Props) {
+export default function RideOptions({ value, onChange, surcharge, basePrice, cardEnabled, budget, walletBalance = 0, showSchedule = true, showBusiness = true }: Props) {
   const set = (patch: Partial<RideOptionsValue>) => onChange({ ...value, ...patch });
   const { token } = useAuth();
   const [promoInput, setPromoInput] = React.useState("");
@@ -97,8 +99,12 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
       )}
 
       {/* Quand */}
-      <Text style={styles.label}><Icon name="clock-outline" size={14} /> Quand ?</Text>
-      <DateTimeChips value={value.scheduledAt} onChange={(d) => set({ scheduledAt: d })} />
+      {showSchedule && (
+        <>
+          <Text style={styles.label}><Icon name="clock-outline" size={14} /> Quand ?</Text>
+          <DateTimeChips value={value.scheduledAt} onChange={(d) => set({ scheduledAt: d })} />
+        </>
+      )}
 
       {/* Pour qui */}
       <Text style={styles.label}><Icon name="account-multiple-outline" size={14} /> Pour qui ?</Text>
@@ -122,7 +128,7 @@ export default function RideOptions({ value, onChange, surcharge, basePrice, car
       )}
 
       {/* Course professionnelle */}
-      {budget && budget.active && (
+      {showBusiness && budget && budget.active && (
         <>
           <Text style={styles.label}><Icon name="briefcase-outline" size={14} /> Déplacement professionnel</Text>
           <Pressable testID="business-toggle" onPress={() => set({ business: !value.business, paymentMethod: !value.business ? "cash" : value.paymentMethod })}
