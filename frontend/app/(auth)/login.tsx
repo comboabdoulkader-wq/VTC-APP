@@ -8,6 +8,7 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import GoogleButton from "@/src/components/GoogleButton";
+import AppleButton from "@/src/components/AppleButton";
 import { useI18n } from "@/src/i18n";
 import { useAuth, homeFor } from "@/src/context/auth";
 
@@ -87,6 +88,7 @@ export default function Login() {
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
 
         <GoogleButton />
+        <AppleButton />
 
         <Pressable testID="forgot-password" onPress={() => router.push("/(auth)/forgot-password" as any)} style={styles.forgot} hitSlop={8}>
           <Text style={styles.forgotText}>{t("forgot_password")}</Text>

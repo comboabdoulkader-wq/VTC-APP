@@ -8,6 +8,7 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 
 import { theme } from "@/src/theme";
 import GoogleButton from "@/src/components/GoogleButton";
+import AppleButton from "@/src/components/AppleButton";
 import { useAuth, Role, homeFor } from "@/src/context/auth";
 
 export default function Register() {
@@ -160,6 +161,7 @@ export default function Register() {
 
         {error ? <Text testID="error-message" style={styles.error}>{error}</Text> : null}
         {role !== "company" && <GoogleButton role={role} />}
+        {role !== "company" && <AppleButton role={role as "passenger" | "driver"} />}
 
         <Pressable
           testID="register-submit-button"

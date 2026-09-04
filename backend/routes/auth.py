@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import (JWT_SECRET, MODERATOR_EMAILS, client_ip, current_user, db, hash_password, make_token, new_id, normalize_phone, notify, now_utc,
                   rate_limit, send_sms, sms_configured, verify_password)
-from models import (GoogleSessionIn, ForgotPasswordIn, LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, ResetPasswordIn, TokenOut,
+from models import (GoogleSessionIn, AppleSignInIn, ForgotPasswordIn, LoginIn, PasswordChangeIn, PhoneSendIn, PhoneVerifyIn, ProfileUpdateIn, RegisterIn, ResetPasswordIn, TokenOut,
                     UserOut)
 from serializers import user_to_out
 
@@ -296,4 +296,63 @@ async def google_session(data: GoogleSessionIn, request: Request):
             user["docs_blocked"] = True
         await db.users.insert_one(user.copy())
     user["is_moderator"] = email in MODERATOR_EMAILS
+    return TokenOut(access_token=make_token(user), user=user_to_out(user))
+
+
+# ---------- Sign in with Apple (native iOS) ----------
+APPLE_ISSUER = "https://appleid.apple.com"
+APPLE_AUDIENCES = [a.strip() for a in os.environ.get("APPLE_AUDIENCES", "").split(",") if a.strip()]
+_apple_jwks_client = None
+
+
+def _get_apple_jwks_client():
+    global _apple_jwks_client
+    if _apple_jwks_client is None:
+        from jwt import PyJWKClient
+        _apple_jwks_client = PyJWKClient("https://appleid.apple.com/auth/keys")
+    return _apple_jwks_client
+
+
+@router.post("/apple", response_model=TokenOut)
+async def apple_sign_in(data: AppleSignInIn, request: Request):
+    """Verify an Apple identity token against Apple's JWKS, upsert the user by apple_sub, and return our own JWT."""
+    import jwt as pyjwt
+    rate_limit(f"apple:{client_ip(request)}", 20, 900)
+    if not APPLE_AUDIENCES:
+        raise HTTPException(500, "Apple Sign In non configuré (APPLE_AUDIENCES)")
+    try:
+        signing_key = _get_apple_jwks_client().get_signing_key_from_jwt(data.identity_token)
+        claims = pyjwt.decode(
+            data.identity_token, signing_key.key, algorithms=["RS256"],
+            audience=APPLE_AUDIENCES, issuer=APPLE_ISSUER,
+        )
+    except Exception:
+        raise HTTPException(401, "Jeton Apple invalide ou expiré, réessayez")
+    apple_sub = claims.get("sub")
+    if not apple_sub:
+        raise HTTPException(401, "Jeton Apple sans identifiant")
+    token_email = (claims.get("email") or data.email or "").lower().strip() or None
+
+    user = await db.users.find_one({"apple_sub": apple_sub}, {"_id": 0})
+    if not user and token_email:
+        # Link Apple to an existing account with the same email (custom or Google).
+        user = await db.users.find_one({"email": token_email}, {"_id": 0})
+    if user:
+        if user.get("is_active") is False:
+            raise HTTPException(403, "Compte désactivé par votre gestionnaire")
+        upd = {"last_login_at": now_utc(), "apple_linked": True, "apple_sub": apple_sub}
+        await db.users.update_one({"id": user["id"]}, {"$set": upd})
+        user.update(upd)
+    else:
+        email = token_email or f"{apple_sub[:24]}@privaterelay.appleid.com"
+        user = {
+            "id": new_id(), "email": email, "password_hash": hash_password(secrets.token_urlsafe(24)),  # unusable password
+            "full_name": (data.full_name or (email.split("@")[0])).strip()[:80], "role": data.role, "phone": None, "phone_verified": False,
+            "sms_enabled": True, "apple_linked": True, "apple_sub": apple_sub, "rating": 5.0, "total_rides": 0, "is_online": False,
+            "is_active": True, "manager_id": None, "referral_code": secrets.token_hex(3).upper(), "wallet_balance": 0.0, "created_at": now_utc(),
+        }
+        if data.role == "driver":
+            user["docs_blocked"] = True
+        await db.users.insert_one(user.copy())
+    user["is_moderator"] = user["email"] in MODERATOR_EMAILS
     return TokenOut(access_token=make_token(user), user=user_to_out(user))

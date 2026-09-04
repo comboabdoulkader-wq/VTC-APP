@@ -59,6 +59,13 @@ class GoogleSessionIn(BaseModel):
     role: Literal["passenger", "driver"] = "passenger"
 
 
+class AppleSignInIn(BaseModel):
+    identity_token: str = Field(min_length=16, max_length=8192)
+    role: Literal["passenger", "driver"] = "passenger"
+    full_name: Optional[str] = Field(default=None, max_length=120)
+    email: Optional[str] = Field(default=None, max_length=200)
+
+
 class ForgotPasswordIn(BaseModel):
     identifier: str = Field(min_length=3, max_length=120)  # email or phone number
 
