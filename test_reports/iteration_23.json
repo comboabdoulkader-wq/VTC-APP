@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only verification of the SUPPORT_HOURS .env quoting fix + regression smoke. Backend boots cleanly, GET /api/ returns 200, GET /api/support/config returns hours == '7j/7 · 6h–23h' with middle dot (·) and en-dash (–) intact. Regression: passenger login OK, /api/rides/estimate returns options, and moderator (chauffeur@test.com) receives 200 on /api/admin/integrations and /api/admin/dashboard. 6/6 pytest cases passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration23_env_fix.py",
+    "/app/test_reports/pytest/iteration23.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/.env: SUPPORT_HOURS is correctly quoted now ('7j/7 · 6h–23h'). Other unquoted values are ASCII-safe, no additional fixes needed.",
+    "routes/booking.py line 147 still has a Python default fallback matching the .env value ('7j/7 · 6h–23h') — good defense in depth if the env variable is stripped in future deploys."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration23_env_fix.py (new pytest file)"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6)",
+    "frontend": "not tested (backend-only scope)"
+  },
+  "seed_data_creation": "None. Reused seeded test accounts passager@test.com and chauffeur@test.com.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SUPPORT_HOURS env fix verified. Endpoint returning hours is GET /api/support/config (public, no auth). Moderator emails are chauffeur@test.com and passager@test.com per /app/memory/test_credentials.md. Login endpoint returns 'access_token'. /api/rides/estimate accepts POST with pickup/dropoff objects containing lat/lng/address.",
+  "rca_of_issue": "Original blocker: backend/.env contained SUPPORT_HOURS=7j/7 · 6h–23h with spaces and non-ASCII characters unquoted, which breaks certain env parsers at deploy (python-dotenv tolerates it but many production loaders/K8s configmap converters do not). Fix: wrap value in double quotes. Verified end-to-end: env value is preserved bit-for-bit and served by /api/support/config."
+}
