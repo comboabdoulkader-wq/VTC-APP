@@ -8,6 +8,7 @@ import { theme } from "@/src/theme";
 import MapCanvas, { MapMarker, LatLng } from "@/src/components/MapCanvas";
 import { getNavApp, setNavApp, openNavigation, NavApp } from "@/src/utils/files";
 import RideChat, { ChatButton } from "@/src/components/RideChat";
+import IncomingRideScreen from "@/src/components/driver/IncomingRideScreen";
 import { apiFetch, useAuth } from "@/src/context/auth";
 import { DEFAULT_PICKUP } from "@/src/data/places";
 import { useDriverLocation } from "@/src/hooks/useDriverLocation";
@@ -47,6 +48,7 @@ export default function DriverHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [eta, setEta] = useState<number | null>(null);
   const [showPermCard, setShowPermCard] = useState(false);
+  const [dismissedOffers, setDismissedOffers] = useState<string[]>([]);
 
   const onPing = useCallback((res: { eta_min?: number }) => { if (res.eta_min != null) setEta(res.eta_min); }, []);
   const loc = useDriverLocation(token, online, onPing);
@@ -125,6 +127,25 @@ export default function DriverHome() {
   const stopArrive = async (i: number) => { if (activeRide) { const r = await act(`/rides/${activeRide.id}/stops/${i}/arrive`); if (r) setActiveRide(r); } };
   const stopDepart = async (i: number) => { if (activeRide) { const r = await act(`/rides/${activeRide.id}/stops/${i}/depart`); if (r) setActiveRide(r); } };
 
+  const offerRide = (!activeRide && online)
+    ? rides.find((r) => r.assigned_driver_id === user?.id && r.offer_expires_at && new Date(r.offer_expires_at).getTime() > Date.now() && !dismissedOffers.includes(r.id))
+    : null;
+
+  const acceptOffer = async () => {
+    if (!offerRide) return;
+    const r = await act(`/rides/${offerRide.id}/accept`);
+    if (r) { setActiveRide(r); setEta(null); setRides((l) => l.filter((x) => x.id !== offerRide.id)); }
+    else { setDismissedOffers((d) => [...d, offerRide.id]); loadAvailable(); }
+  };
+  const declineOffer = async () => {
+    if (!offerRide) return;
+    const id = offerRide.id;
+    setDismissedOffers((d) => [...d, id]);
+    await act(`/rides/${id}/decline`);
+    setRides((l) => l.filter((x) => x.id !== id));
+  };
+  const expireOffer = () => { if (offerRide) setDismissedOffers((d) => [...d, offerRide.id]); };
+
   const markers: MapMarker[] = [];
   if (loc.coords) markers.push({ id: "me", type: "driver", coordinate: { latitude: loc.coords.lat, longitude: loc.coords.lng } });
   if (activeRide) {
@@ -135,6 +156,15 @@ export default function DriverHome() {
 
   return (
     <View style={styles.root} testID="driver-home">
+      {offerRide && (
+        <IncomingRideScreen
+          ride={offerRide}
+          driverCoords={loc.coords}
+          onAccept={acceptOffer}
+          onDecline={declineOffer}
+          onExpire={expireOffer}
+        />
+      )}
       <MapCanvas region={{ ...center, latitudeDelta: 0.08, longitudeDelta: 0.08 }} markers={markers} polyline={route || undefined} />
 
       <View style={[styles.topBar, { top: insets.top + theme.spacing.md }]}>

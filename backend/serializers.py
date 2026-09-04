@@ -89,6 +89,8 @@ def ride_to_out(r: dict) -> RideOut:
         driver_has_photo=bool(r.get("driver_has_photo")),
         driver_location=DriverLocation(**loc) if loc else None,
         driver_eta_min=r.get("driver_eta_min"),
+        assigned_driver_id=r.get("assigned_driver_id"),
+        offer_expires_at=r.get("offer_expires_at"),
         pickup=LocationIn(**r["pickup"]),
         dropoff=LocationIn(**r["dropoff"]),
         stops=[LocationIn(**s) for s in (r.get("stops") or [])],

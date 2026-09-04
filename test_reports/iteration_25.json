@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 25 (Écran Nouvelle Course) — BOTH backend and frontend tested end-to-end and PASS. Backend (5/5 pytest, 100%): RideOut now exposes assigned_driver_id + offer_expires_at; POST /api/rides sets both fields when a single Paris-based online driver is the best candidate; GET /api/rides/{id} and GET /api/rides/available surface the fields to the assigned driver; POST /api/rides/{id}/accept works for the assigned driver; POST /api/rides/{id}/decline cascades the offer (assigned_driver_id cleared/moved, decline record persisted, ride hidden from the declining driver's /available). Frontend (Expo web, mobile viewport): logged in as chauffeur@test.com, toggled online, and a passenger-created immediate ride surfaced the full-screen IncomingRideScreen overlay (testID incoming-ride-screen) with a live countdown (offer-countdown, seen at 13s), client label, price €5.07, route addresses, and both offer-decline + offer-accept buttons. Tapping Refuser dismissed the overlay; tapping Accepter moved to the active-ride UI (start-ride visible) and cleared the overlay. Auto-expire dismissal is exercised implicitly via the countdown wiring and onExpire prop; the offer visibility guard on line 131 of app/(driver)/index.tsx also filters out expired offers.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration25_incoming_ride.py",
+    "/app/test_reports/pytest/iteration25.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "app/(driver)/index.tsx:131 — offerRide filter compares `new Date(r.offer_expires_at).getTime() > Date.now()` client-side. If the driver device clock is skewed vs server UTC, the overlay may never show or dismiss too early. Consider driving expiry off a server-relative delta (offer_seconds_remaining) or using the countdown component's onExpire only.",
+    "IncomingRideScreen.tsx useCountdown effect depends only on [expiresAt]; onExpire is captured stale via closure. It's protected by firedRef but changing the onExpire prop across renders is silently ignored — acceptable here but worth a comment.",
+    "routes/rides.py:191 create_ride still writes assigned_driver_id/offer_expires_at with a second update_one AFTER insert_one; race window called out in iteration 24 remains. Not blocking for this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration25_incoming_ride.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Test fixture logs in chauffeur@test.com via /api/auth/login and, if docs_blocked, clears it directly in Mongo (db.users). Pings /api/driver/status with lat=48.8583 lng=2.3477 to place the driver near the pickup and also writes user.driver_location directly (compute_candidates prefers this field per iteration 24 note). Test rides are created via /api/rides as passager@test.com and cancelled at the end where relevant. Prior stale active rides for the driver were cancelled once in Mongo before the UI test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Frontend flow requires: (1) select French + Continue on /welcome, (2) click 'Se connecter' CTA -> login form, (3) fill email+password and click the FORM's 'Se connecter' (there are two visible 'Se connecter' texts on the login page). Driver home is at '/' after login (Expo Router (driver) group). Any pre-existing active ride for the driver blocks the IncomingRideScreen from appearing (offerRide is gated by !activeRide) — always cancel active rides for the test driver in Mongo before UI runs. Driver polls /rides/available every 5s so allow ~5-10s after ride creation for the overlay to appear. Default offer_seconds is 15 so accept/decline must happen quickly.",
+  "rca_of_issue": "N/A — feature works. Only environmental gotcha: a leftover 'accepted' ride from a previous test iteration was masking the overlay until it was cancelled."
+}

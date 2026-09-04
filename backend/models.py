@@ -220,6 +220,8 @@ class RideOut(BaseModel):
     driver_has_photo: bool = False
     driver_location: Optional[DriverLocation] = None
     driver_eta_min: Optional[int] = None
+    assigned_driver_id: Optional[str] = None
+    offer_expires_at: Optional[datetime] = None
     pickup: LocationIn
     dropoff: LocationIn
     stops: List[LocationIn] = []
