@@ -177,6 +177,10 @@ async def push_new_rides_to_drivers(rides: list[dict]):
         return
     ids = [d["id"] async for d in db.users.find(
         {"role": "driver", "is_online": True, "is_active": {"$ne": False}, "docs_blocked": {"$ne": True}}, {"_id": 0, "id": 1}).limit(300)]
+    # Intelligent dispatch: notify the best-matched candidate first (non-breaking; others still notified).
+    best = public[0].get("best_driver_id")
+    if best and best in ids:
+        ids = [best] + [i for i in ids if i != best]
     r = public[0]
     when = "programmée" if r.get("scheduled_at") else "immédiate"
     title = f"Nouvelle course {when}" if len(public) == 1 else f"{len(public)} nouvelles courses"
@@ -190,6 +194,12 @@ async def create_ride(data: RideCreateIn, user=Depends(require_role("passenger")
     await check_budget(user, [ride])
     await apply_wallet(user, [ride])
     await db.rides.insert_one(ride.copy())
+    if not ride.get("scheduled_at"):
+        from routes.adminpanel import compute_candidates
+        cands = await compute_candidates(ride)
+        if cands:
+            ride["candidates"] = cands
+            ride["best_driver_id"] = cands[0]["driver_id"]
     await push_new_rides_to_drivers([ride])
     return ride_to_out(ride)
 

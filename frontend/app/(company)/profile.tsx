@@ -13,6 +13,7 @@ import PayoutsAdmin from "@/src/components/admin/PayoutsAdmin";
 import ApiManager from "@/src/components/admin/ApiManager";
 import AdminDashboard from "@/src/components/admin/AdminDashboard";
 import CommissionSettings from "@/src/components/admin/CommissionSettings";
+import DispatchSettings from "@/src/components/admin/DispatchSettings";
 import PromosManager from "@/src/components/PromosManager";
 import PartnerCommissions from "@/src/components/company/PartnerCommissions";
 import WalletCard from "@/src/components/WalletCard";
@@ -31,6 +32,7 @@ export default function CompanyProfile() {
   const [showApi, setShowApi] = useState(false);
   const [showDash, setShowDash] = useState(false);
   const [showComm, setShowComm] = useState(false);
+  const [showDispatch, setShowDispatch] = useState(false);
   const [showPromos, setShowPromos] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
 
@@ -100,10 +102,16 @@ export default function CompanyProfile() {
             <Text style={styles.menuLabel}>Commissions & Cashback</Text>
             <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
           </Pressable>
+          <Pressable testID="open-dispatch-settings" onPress={() => setShowDispatch(true)} style={styles.menu}>
+            <Icon name="radar" size={22} color={theme.color.onSurface} />
+            <Text style={styles.menuLabel}>Gestion des courses</Text>
+            <Icon name="chevron-right" size={20} color={theme.color.onSurfaceTertiary} />
+          </Pressable>
         </>
       )}
       <AdminDashboard visible={showDash} onClose={() => setShowDash(false)} />
       <CommissionSettings visible={showComm} onClose={() => setShowComm(false)} />
+      <DispatchSettings visible={showDispatch} onClose={() => setShowDispatch(false)} />
       {user.is_moderator && (
         <Pressable testID="open-drivers-admin" onPress={() => setShowAdmin(true)} style={styles.menu}>
           <Icon name="shield-account-outline" size={22} color={theme.color.onSurface} />
