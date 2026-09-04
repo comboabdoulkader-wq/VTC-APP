@@ -171,14 +171,14 @@ async def compute_candidates(ride: dict) -> list:
     }.get(priority, {"dist": 0.3, "eta": 0.4, "rating": 0.2, "fair": 0.1})
     drivers = [d async for d in db.users.find(
         {"role": "driver", "is_online": True, "is_active": {"$ne": False}, "docs_blocked": {"$ne": True}},
-        {"_id": 0, "id": 1, "full_name": 1, "rating": 1, "driver_location": 1, "vehicle_type": 1, "last_assigned_at": 1}).limit(300)]
+        {"_id": 0, "id": 1, "full_name": 1, "rating": 1, "driver_location": 1, "last_location": 1, "vehicle_type": 1, "last_assigned_at": 1}).limit(300)]
     cands = []
     now = now_utc()
     for d in drivers:
         # Vehicle compatibility (only when the driver has a declared vehicle type).
         if d.get("vehicle_type") and ride.get("vehicle_type") and d["vehicle_type"] != ride["vehicle_type"]:
             continue
-        loc = d.get("driver_location") or {}
+        loc = d.get("driver_location") or d.get("last_location") or {}
         if loc.get("lat") is not None and pickup.get("lat") is not None:
             dist = round(haversine_km(loc["lat"], loc["lng"], pickup["lat"], pickup["lng"]), 2)
             if dist > radius:
@@ -212,3 +212,31 @@ async def ride_candidates(ride_id: str, user=Depends(moderator_only)):
     if not r:
         raise HTTPException(404, "Course introuvable")
     return {"candidates": r.get("candidates") or [], "best_driver_id": r.get("best_driver_id"), "priority": r.get("dispatch_priority"), "status": r.get("status")}
+
+
+async def advance_offer(ride_id: str):
+    """Cascade: offer the ride to the next best candidate who hasn't declined; else fall back to broadcast."""
+    from core import notify
+    r = await db.rides.find_one({"id": ride_id, "status": "requested"}, {"_id": 0})
+    if not r:
+        return None
+    declined = {d["driver_id"] async for d in db.ride_declines.find({"ride_id": ride_id}, {"_id": 0, "driver_id": 1})}
+    offer_seconds = int(r.get("offer_seconds", 15) or 15)
+    nxt = next((c for c in (r.get("candidates") or []) if c["driver_id"] not in declined), None)
+    if nxt:
+        exp = now_utc() + timedelta(seconds=offer_seconds)
+        await db.rides.update_one({"id": ride_id}, {"$set": {"assigned_driver_id": nxt["driver_id"], "offer_expires_at": exp}})
+        await notify(nxt["driver_id"], "ride", "Nouvelle course", f"Course à {nxt.get('distance_km', '?')} km · répondez sous {offer_seconds}s", ride_id)
+        return nxt["driver_id"]
+    # No candidate left -> open to everyone (broadcast fallback), never dead-end.
+    await db.rides.update_one({"id": ride_id}, {"$set": {"assigned_driver_id": None, "offer_expires_at": None}})
+    return None
+
+
+async def dispatch_expiry_sweep():
+    """Timeout handler: assigned candidate didn't answer in time -> auto-decline and cascade to the next."""
+    from core import notify
+    now = now_utc()
+    async for r in db.rides.find({"status": "requested", "assigned_driver_id": {"$ne": None}, "offer_expires_at": {"$lt": now}}, {"_id": 0, "id": 1, "assigned_driver_id": 1}):
+        await db.ride_declines.update_one({"ride_id": r["id"], "driver_id": r["assigned_driver_id"]}, {"$set": {"declined_at": now, "reason": "timeout"}}, upsert=True)
+        await advance_offer(r["id"])

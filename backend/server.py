@@ -106,6 +106,18 @@ async def statements_loop():
         await asyncio.sleep(6 * 3600)
 
 
+async def dispatch_loop():
+    """Every few seconds: expire unanswered ride offers and cascade to the next best driver."""
+    from routes.adminpanel import dispatch_expiry_sweep
+    while True:
+        try:
+            await dispatch_expiry_sweep()
+        except Exception as e:
+            logging.getLogger("dispatch").warning("sweep error: %s", e)
+        await asyncio.sleep(5)
+
+
+
 @app.on_event("startup")
 async def on_startup():
     await seed_cities()
@@ -115,6 +127,7 @@ async def on_startup():
     asyncio.create_task(compliance_loop())
     asyncio.create_task(flights_loop())
     asyncio.create_task(statements_loop())
+    asyncio.create_task(dispatch_loop())
 
 
 @app.on_event("shutdown")

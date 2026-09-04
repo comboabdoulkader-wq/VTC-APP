@@ -51,6 +51,8 @@ async def decline_ride(ride_id: str, user=Depends(require_role("driver"))):
     if not r:
         raise HTTPException(404, "Course introuvable")
     await db.ride_declines.update_one({"ride_id": ride_id, "driver_id": user["id"]}, {"$set": {"declined_at": now_utc()}}, upsert=True)
+    from routes.adminpanel import advance_offer
+    await advance_offer(ride_id)
     return {"ok": True}
 
 

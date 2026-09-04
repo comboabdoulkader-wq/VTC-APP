@@ -180,3 +180,10 @@ See /app/memory/test_credentials.md
 - frontend: DispatchSettings.tsx (dispatch-settings) "Gestion des courses" sheet (attribution auto toggle, radius/max/response, priority chips, alarm enable+duration+repeats, planning allow+min lead+max days). Menu open-dispatch-settings added to driver/passenger/company profiles (moderators).
 - Verified: settings default+save, candidates ranking (score/distance/eta/rating), priority change persists, UI screenshot confirmed.
 - Deferred (large UI, next): driver alarm sound + auto-open "Nouvelle course" screen, countdown accept/decline with cascade to next candidate, driver Planning tab + calendar, scheduled-ride reminders (1h/30/15/5), integrated turn-by-turn navigation.
+
+## Iteration 27 – Cascade automatique d'attribution (DONE, tested 7/7 backend)
+- adminpanel.advance_offer(ride_id): offers to next non-declined candidate (sets assigned_driver_id + offer_expires_at + notify), else assigned_driver_id=null (broadcast fallback — never dead-ends). dispatch_expiry_sweep + server.dispatch_loop (every 5s) auto-decline (reason=timeout) + advance on expiry.
+- rides.create_ride: instant rides assign best candidate first with offer deadline + notify. passenger_extras decline endpoint now calls advance_offer.
+- Fix (from test review): compute_candidates now reads driver_location OR last_location (driver GPS is stored as last_location), so distance scoring actually engages.
+- Verified 7/7: best-driver offer, single/multi-driver cascade, timeout cascade, settings persist, accept/start/complete regression OK. Report iteration_24.json.
+- Deferred (need more room + native build): driver "Nouvelle course" full-screen (map+countdown+alarm sound+auto-open), driver Planning tab+calendar, scheduled reminders (1h/30/15/5), integrated navigation.

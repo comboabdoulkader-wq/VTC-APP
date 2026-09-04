@@ -200,6 +200,12 @@ async def create_ride(data: RideCreateIn, user=Depends(require_role("passenger")
         if cands:
             ride["candidates"] = cands
             ride["best_driver_id"] = cands[0]["driver_id"]
+            # Sequential intelligent dispatch: offer to the best candidate first with a response deadline.
+            from datetime import timedelta
+            ride["assigned_driver_id"] = cands[0]["driver_id"]
+            ride["offer_expires_at"] = now_utc() + timedelta(seconds=ride.get("offer_seconds", 15))
+            await db.rides.update_one({"id": ride["id"]}, {"$set": {"assigned_driver_id": ride["assigned_driver_id"], "offer_expires_at": ride["offer_expires_at"]}})
+            await notify(cands[0]["driver_id"], "ride", "Nouvelle course", f"Course à {cands[0].get('distance_km', '?')} km · répondez vite", ride["id"])
     await push_new_rides_to_drivers([ride])
     return ride_to_out(ride)
 
